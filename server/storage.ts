@@ -1,125 +1,113 @@
-import { InsertUser, User, Todo, Post, Newsletter } from "@shared/schema";
+import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+
   // Todo operations
   getTodos(userId: number): Promise<Todo[]>;
   createTodo(todo: { title: string; userId: number }): Promise<Todo>;
   updateTodo(id: number, completed: boolean): Promise<Todo>;
   deleteTodo(id: number): Promise<void>;
-  
+
   // Post operations
   getPosts(userId: number): Promise<Post[]>;
   createPost(post: { content: string; scheduledDate: Date; userId: number }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
-  
+
   // Newsletter operations
   getNewsletters(userId: number): Promise<Newsletter[]>;
   createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter>;
-  
-  sessionStore: session.SessionStore;
+
+  sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private todos: Map<number, Todo>;
-  private posts: Map<number, Post>;
-  private newsletters: Map<number, Newsletter>;
-  sessionStore: session.SessionStore;
-  currentId: number;
+export class DatabaseStorage implements IStorage {
+  sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.todos = new Map();
-    this.posts = new Map();
-    this.newsletters = new Map();
-    this.currentId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true,
     });
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async getTodos(userId: number): Promise<Todo[]> {
-    return Array.from(this.todos.values()).filter(todo => todo.userId === userId);
+    return db.select().from(todos).where(eq(todos.userId, userId));
   }
 
   async createTodo(todo: { title: string; userId: number }): Promise<Todo> {
-    const id = this.currentId++;
-    const newTodo: Todo = { ...todo, id, completed: false };
-    this.todos.set(id, newTodo);
+    const [newTodo] = await db.insert(todos).values(todo).returning();
     return newTodo;
   }
 
   async updateTodo(id: number, completed: boolean): Promise<Todo> {
-    const todo = this.todos.get(id);
-    if (!todo) throw new Error("Todo not found");
-    const updatedTodo = { ...todo, completed };
-    this.todos.set(id, updatedTodo);
-    return updatedTodo;
+    const [todo] = await db
+      .update(todos)
+      .set({ completed })
+      .where(eq(todos.id, id))
+      .returning();
+    return todo;
   }
 
   async deleteTodo(id: number): Promise<void> {
-    this.todos.delete(id);
+    await db.delete(todos).where(eq(todos.id, id));
   }
 
   async getPosts(userId: number): Promise<Post[]> {
-    return Array.from(this.posts.values()).filter(post => post.userId === userId);
+    return db.select().from(posts).where(eq(posts.userId, userId));
   }
 
   async createPost(post: { content: string; scheduledDate: Date; userId: number }): Promise<Post> {
-    const id = this.currentId++;
-    const newPost: Post = { ...post, id, approved: false };
-    this.posts.set(id, newPost);
+    const [newPost] = await db.insert(posts).values(post).returning();
     return newPost;
   }
 
   async approvePost(id: number): Promise<Post> {
-    const post = this.posts.get(id);
-    if (!post) throw new Error("Post not found");
-    const updatedPost = { ...post, approved: true };
-    this.posts.set(id, updatedPost);
-    return updatedPost;
+    const [post] = await db
+      .update(posts)
+      .set({ approved: true })
+      .where(eq(posts.id, id))
+      .returning();
+    return post;
   }
 
   async deletePost(id: number): Promise<void> {
-    this.posts.delete(id);
+    await db.delete(posts).where(eq(posts.id, id));
   }
 
   async getNewsletters(userId: number): Promise<Newsletter[]> {
-    return Array.from(this.newsletters.values()).filter(newsletter => newsletter.userId === userId);
+    return db.select().from(newsletters).where(eq(newsletters.userId, userId));
   }
 
   async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
-    const id = this.currentId++;
-    const newNewsletter: Newsletter = { ...newsletter, id };
-    this.newsletters.set(id, newNewsletter);
+    const [newNewsletter] = await db.insert(newsletters).values(newsletter).returning();
     return newNewsletter;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
