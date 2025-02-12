@@ -8,13 +8,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { Redirect } from "wouter";
+import type { InsertUser } from "@shared/schema";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
-  const loginForm = useForm({
+  const loginForm = useForm<InsertUser>({
     resolver: zodResolver(insertUserSchema),
   });
-  const registerForm = useForm({
+  const registerForm = useForm<InsertUser>({
     resolver: zodResolver(insertUserSchema),
   });
 
@@ -27,13 +28,13 @@ export default function AuthPage() {
       <div className="flex-1 flex items-center justify-center">
         <Card className="w-[400px]">
           <CardHeader>
-            <CardTitle>Welcome to Client Communications</CardTitle>
+            <CardTitle>Willkommen bei Client Communications</CardTitle>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="login">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
+                <TabsTrigger value="register">Registrieren</TabsTrigger>
               </TabsList>
 
               <TabsContent value="login">
@@ -44,7 +45,7 @@ export default function AuthPage() {
                   className="space-y-4"
                 >
                   <div className="space-y-2">
-                    <Label htmlFor="username">Username</Label>
+                    <Label htmlFor="username">Benutzername</Label>
                     <Input
                       id="username"
                       {...loginForm.register("username")}
@@ -52,7 +53,7 @@ export default function AuthPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password">Passwort</Label>
                     <Input
                       id="password"
                       type="password"
@@ -65,7 +66,7 @@ export default function AuthPage() {
                     className="w-full"
                     disabled={loginMutation.isPending}
                   >
-                    Login
+                    Anmelden
                   </Button>
                 </form>
               </TabsContent>
@@ -78,7 +79,7 @@ export default function AuthPage() {
                   className="space-y-4"
                 >
                   <div className="space-y-2">
-                    <Label htmlFor="reg-username">Username</Label>
+                    <Label htmlFor="reg-username">Benutzername</Label>
                     <Input
                       id="reg-username"
                       {...registerForm.register("username")}
@@ -86,7 +87,7 @@ export default function AuthPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="reg-password">Password</Label>
+                    <Label htmlFor="reg-password">Passwort</Label>
                     <Input
                       id="reg-password"
                       type="password"
@@ -99,7 +100,7 @@ export default function AuthPage() {
                     className="w-full"
                     disabled={registerMutation.isPending}
                   >
-                    Register
+                    Registrieren
                   </Button>
                 </form>
               </TabsContent>
@@ -110,12 +111,11 @@ export default function AuthPage() {
       <div className="hidden lg:flex flex-1 bg-gray-50 items-center justify-center p-12">
         <div className="max-w-lg">
           <h1 className="text-4xl font-bold mb-6 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-            Streamline Your Client Communications
+            Optimieren Sie Ihre Kundenkommunikation
           </h1>
           <p className="text-lg text-gray-600">
-            Manage tasks, plan social media posts, and create newsletters all in one
-            place. The perfect tool for agencies and their clients to collaborate
-            efficiently.
+            Verwalten Sie Aufgaben, planen Sie Social Media Posts und erstellen Sie 
+            Newsletter an einem Ort. Das perfekte Tool für Agenturen und ihre Kunden.
           </p>
         </div>
       </div>

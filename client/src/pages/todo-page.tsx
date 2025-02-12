@@ -12,7 +12,10 @@ import { useToast } from "@/hooks/use-toast";
 export default function TodoPage() {
   const [newTodo, setNewTodo] = useState("");
   const { toast } = useToast();
-  const { data: todos } = useQuery<Todo[]>({ queryKey: ["/api/todos"] });
+  const { data: todos } = useQuery<Todo[]>({ 
+    queryKey: ["/api/todos"],
+    staleTime: 0, // Immer aktuelle Daten laden
+  });
 
   const createTodoMutation = useMutation({
     mutationFn: async (title: string) => {
@@ -22,6 +25,17 @@ export default function TodoPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/todos"] });
       setNewTodo("");
+      toast({
+        title: "Aufgabe erstellt",
+        description: "Die neue Aufgabe wurde erfolgreich hinzugefügt",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Fehler",
+        description: "Die Aufgabe konnte nicht erstellt werden: " + error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -33,6 +47,13 @@ export default function TodoPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/todos"] });
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Fehler",
+        description: "Status konnte nicht geändert werden: " + error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteTodoMutation = useMutation({
@@ -42,8 +63,15 @@ export default function TodoPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/todos"] });
       toast({
-        title: "Todo deleted",
-        description: "The todo has been removed from your list",
+        title: "Aufgabe gelöscht",
+        description: "Die Aufgabe wurde aus der Liste entfernt",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Fehler",
+        description: "Die Aufgabe konnte nicht gelöscht werden: " + error.message,
+        variant: "destructive",
       });
     },
   });
@@ -54,25 +82,25 @@ export default function TodoPage() {
       <main className="container mx-auto py-6 px-4">
         <Card>
           <CardHeader>
-            <CardTitle>Todo List</CardTitle>
+            <CardTitle>Aufgabenliste</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-4 mb-6">
               <Input
-                placeholder="Add new todo..."
+                placeholder="Neue Aufgabe hinzufügen..."
                 value={newTodo}
                 onChange={(e) => setNewTodo(e.target.value)}
                 onKeyPress={(e) => {
-                  if (e.key === "Enter" && newTodo) {
-                    createTodoMutation.mutate(newTodo);
+                  if (e.key === "Enter" && newTodo.trim()) {
+                    createTodoMutation.mutate(newTodo.trim());
                   }
                 }}
               />
               <Button
-                onClick={() => newTodo && createTodoMutation.mutate(newTodo)}
-                disabled={createTodoMutation.isPending}
+                onClick={() => newTodo.trim() && createTodoMutation.mutate(newTodo.trim())}
+                disabled={!newTodo.trim() || createTodoMutation.isPending}
               >
-                Add
+                Hinzufügen
               </Button>
             </div>
 
@@ -103,7 +131,7 @@ export default function TodoPage() {
                     size="sm"
                     onClick={() => deleteTodoMutation.mutate(todo.id)}
                   >
-                    Delete
+                    Löschen
                   </Button>
                 </li>
               ))}
