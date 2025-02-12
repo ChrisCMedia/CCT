@@ -39,10 +39,14 @@ export const insertTodoSchema = createInsertSchema(todos).pick({
   title: true,
 });
 
-export const insertPostSchema = createInsertSchema(posts).pick({
-  content: true,
-  scheduledDate: true,
-});
+export const insertPostSchema = createInsertSchema(posts)
+  .pick({
+    content: true,
+    scheduledDate: true,
+  })
+  .extend({
+    scheduledDate: z.coerce.date(),
+  });
 
 export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
   title: true,

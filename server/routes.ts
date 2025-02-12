@@ -10,70 +10,120 @@ export function registerRoutes(app: Express): Server {
   // Todo routes
   app.get("/api/todos", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const todos = await storage.getTodos(req.user.id);
-    res.json(todos);
+    try {
+      const todos = await storage.getTodos(req.user.id);
+      res.json(todos);
+    } catch (error) {
+      console.error("Error fetching todos:", error);
+      res.status(500).json({ message: "Failed to fetch todos" });
+    }
   });
 
   app.post("/api/todos", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const parsed = insertTodoSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json(parsed.error);
-    const todo = await storage.createTodo({ ...parsed.data, userId: req.user.id });
-    res.json(todo);
+    try {
+      const parsed = insertTodoSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json(parsed.error);
+      const todo = await storage.createTodo({ ...parsed.data, userId: req.user.id });
+      res.json(todo);
+    } catch (error) {
+      console.error("Error creating todo:", error);
+      res.status(500).json({ message: "Failed to create todo" });
+    }
   });
 
   app.patch("/api/todos/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const todo = await storage.updateTodo(Number(req.params.id), req.body.completed);
-    res.json(todo);
+    try {
+      const todo = await storage.updateTodo(Number(req.params.id), req.body.completed);
+      res.json(todo);
+    } catch (error) {
+      console.error("Error updating todo:", error);
+      res.status(500).json({ message: "Failed to update todo" });
+    }
   });
 
   app.delete("/api/todos/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    await storage.deleteTodo(Number(req.params.id));
-    res.sendStatus(200);
+    try {
+      await storage.deleteTodo(Number(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting todo:", error);
+      res.status(500).json({ message: "Failed to delete todo" });
+    }
   });
 
   // Post routes
   app.get("/api/posts", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const posts = await storage.getPosts(req.user.id);
-    res.json(posts);
+    try {
+      const posts = await storage.getPosts(req.user.id);
+      res.json(posts);
+    } catch (error) {
+      console.error("Error fetching posts:", error);
+      res.status(500).json({ message: "Failed to fetch posts" });
+    }
   });
 
   app.post("/api/posts", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const parsed = insertPostSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json(parsed.error);
-    const post = await storage.createPost({ ...parsed.data, userId: req.user.id });
-    res.json(post);
+    try {
+      const parsed = insertPostSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json(parsed.error);
+      const post = await storage.createPost({ ...parsed.data, userId: req.user.id });
+      res.json(post);
+    } catch (error) {
+      console.error("Error creating post:", error);
+      res.status(500).json({ message: "Failed to create post" });
+    }
   });
 
   app.patch("/api/posts/:id/approve", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const post = await storage.approvePost(Number(req.params.id));
-    res.json(post);
+    try {
+      const post = await storage.approvePost(Number(req.params.id));
+      res.json(post);
+    } catch (error) {
+      console.error("Error approving post:", error);
+      res.status(500).json({ message: "Failed to approve post" });
+    }
   });
 
   app.delete("/api/posts/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    await storage.deletePost(Number(req.params.id));
-    res.sendStatus(200);
+    try {
+      await storage.deletePost(Number(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      res.status(500).json({ message: "Failed to delete post" });
+    }
   });
 
   // Newsletter routes
   app.get("/api/newsletters", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const newsletters = await storage.getNewsletters(req.user.id);
-    res.json(newsletters);
+    try {
+      const newsletters = await storage.getNewsletters(req.user.id);
+      res.json(newsletters);
+    } catch (error) {
+      console.error("Error fetching newsletters:", error);
+      res.status(500).json({ message: "Failed to fetch newsletters" });
+    }
   });
 
   app.post("/api/newsletters", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const parsed = insertNewsletterSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json(parsed.error);
-    const newsletter = await storage.createNewsletter({ ...parsed.data, userId: req.user.id });
-    res.json(newsletter);
+    try {
+      const parsed = insertNewsletterSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json(parsed.error);
+      const newsletter = await storage.createNewsletter({ ...parsed.data, userId: req.user.id });
+      res.json(newsletter);
+    } catch (error) {
+      console.error("Error creating newsletter:", error);
+      res.status(500).json({ message: "Failed to create newsletter" });
+    }
   });
 
   const httpServer = createServer(app);
