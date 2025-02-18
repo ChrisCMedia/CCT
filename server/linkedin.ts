@@ -30,9 +30,9 @@ class LinkedInAPI {
 
   async sharePost(params: {
     content: string;
-    articleUrl?: string;
-    imageUrl?: string;
-    visibility?: string;
+    articleUrl?: string | undefined;
+    imageUrl?: string | undefined;
+    visibility?: string | undefined;
     userId: string;
   }) {
     const payload = {
@@ -77,11 +77,16 @@ class LinkedInAPI {
 }
 
 export function setupLinkedInAuth(app: Express) {
+  if (!process.env.LINKEDIN_CLIENT_ID || !process.env.LINKEDIN_CLIENT_SECRET) {
+    console.error("LinkedIn OAuth credentials missing");
+    return;
+  }
+
   passport.use(
     new LinkedInStrategy(
       {
-        clientID: process.env.LINKEDIN_CLIENT_ID!,
-        clientSecret: process.env.LINKEDIN_CLIENT_SECRET!,
+        clientID: process.env.LINKEDIN_CLIENT_ID,
+        clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
         callbackURL: "/auth/linkedin/callback",
         scope: ["r_liteprofile", "r_emailaddress", "w_member_social"],
       },
@@ -156,9 +161,9 @@ export function setupLinkedInAuth(app: Express) {
       // Post auf LinkedIn veröffentlichen
       const response = await linkedIn.sharePost({
         content: post.content,
-        articleUrl: post.articleUrl,
-        imageUrl: post.imageUrl,
-        visibility: post.visibility,
+        articleUrl: post.articleUrl || undefined,
+        imageUrl: post.imageUrl || undefined,
+        visibility: post.visibility || undefined,
         userId: account.platformUserId!,
       });
 
