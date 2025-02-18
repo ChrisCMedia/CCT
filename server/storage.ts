@@ -229,20 +229,22 @@ export class DatabaseStorage implements IStorage {
     postType?: string;
     articleUrl?: string;
   }): Promise<Post> {
+    console.log("Storage: Updating post with data:", data); // Debug logging
+
     const [post] = await db
       .update(posts)
       .set({
         content: data.content,
         lastEditedAt: new Date(),
         lastEditedByUserId: data.userId,
-        scheduledDate: data.scheduledDate || undefined,
-        accountId: data.accountId || undefined,
-        imageUrl: data.imageUrl || undefined,
-        platformPostId: data.platformPostId || undefined,
-        publishStatus: data.publishStatus || undefined,
-        visibility: data.visibility || undefined,
-        postType: data.postType || undefined,
-        articleUrl: data.articleUrl || undefined,
+        scheduledDate: data.scheduledDate,
+        accountId: data.accountId,
+        imageUrl: data.imageUrl,
+        platformPostId: data.platformPostId,
+        publishStatus: data.publishStatus,
+        visibility: data.visibility,
+        postType: data.postType,
+        articleUrl: data.articleUrl,
       })
       .where(eq(posts.id, id))
       .returning();

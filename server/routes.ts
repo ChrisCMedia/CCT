@@ -178,14 +178,18 @@ export function registerRoutes(app: Express): Server {
     try {
       // Parse and validate the scheduled date
       let scheduledDate: Date | undefined;
-      try {
-        scheduledDate = req.body.scheduledDate ? new Date(req.body.scheduledDate) : undefined;
-        if (scheduledDate && scheduledDate.toString() === "Invalid Date") {
-          throw new Error("Invalid date format");
+      if (req.body.scheduledDate) {
+        try {
+          scheduledDate = new Date(req.body.scheduledDate);
+          if (isNaN(scheduledDate.getTime())) {
+            return res.status(400).json({ message: "Ungültiges Datumsformat" });
+          }
+        } catch (error) {
+          return res.status(400).json({ message: "Fehler beim Parsen des Datums" });
         }
-      } catch (error) {
-        return res.status(400).json({ message: "Invalid date format for scheduledDate" });
       }
+
+      console.log("Updating post with date:", scheduledDate); // Debug logging
 
       const post = await storage.updatePost(Number(req.params.id), {
         content: req.body.content,
