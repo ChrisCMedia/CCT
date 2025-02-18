@@ -22,7 +22,18 @@ export interface IStorage {
   getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]>;
   getPost(id: number): Promise<Post | undefined>;
   createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post>;
-  updatePost(id: number, data: { content: string; userId: number; platformPostId?: string; publishStatus?: string }): Promise<Post>;
+  updatePost(id: number, data: {
+    content: string;
+    userId: number;
+    scheduledDate?: Date;
+    accountId?: number;
+    imageUrl?: string;
+    platformPostId?: string;
+    publishStatus?: string;
+    visibility?: string;
+    postType?: string;
+    articleUrl?: string;
+  }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   unapprovePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
@@ -138,15 +149,32 @@ export class DatabaseStorage implements IStorage {
     return newPost;
   }
 
-  async updatePost(id: number, data: { content: string; userId: number; platformPostId?: string; publishStatus?: string }): Promise<Post> {
+  async updatePost(id: number, data: {
+    content: string;
+    userId: number;
+    scheduledDate?: Date;
+    accountId?: number;
+    imageUrl?: string;
+    platformPostId?: string;
+    publishStatus?: string;
+    visibility?: string;
+    postType?: string;
+    articleUrl?: string;
+  }): Promise<Post> {
     const [post] = await db
       .update(posts)
       .set({
         content: data.content,
         lastEditedAt: new Date(),
         lastEditedByUserId: data.userId,
+        ...(data.scheduledDate && { scheduledDate: data.scheduledDate }),
+        ...(data.accountId && { accountId: data.accountId }),
+        ...(data.imageUrl && { imageUrl: data.imageUrl }),
         ...(data.platformPostId && { platformPostId: data.platformPostId }),
         ...(data.publishStatus && { publishStatus: data.publishStatus }),
+        ...(data.visibility && { visibility: data.visibility }),
+        ...(data.postType && { postType: data.postType }),
+        ...(data.articleUrl && { articleUrl: data.articleUrl }),
       })
       .where(eq(posts.id, id))
       .returning();

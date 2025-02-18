@@ -18,11 +18,10 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Image } from "lucide-react";
+import { Image, Linkedin, Pencil } from "lucide-react";
 import { formatDistance } from "date-fns";
 import { de } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +31,18 @@ import {
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in Bytes
 
+const POST_TYPES = [
+  { value: "post", label: "Standard Post" },
+  { value: "article", label: "Artikel" },
+  { value: "poll", label: "Umfrage" },
+];
+
+const VISIBILITIES = [
+  { value: "public", label: "Öffentlich" },
+  { value: "connections", label: "Nur Verbindungen" },
+  { value: "private", label: "Privat" },
+];
+
 export default function PostPlannerPage() {
   const [content, setContent] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date>();
@@ -39,6 +50,10 @@ export default function PostPlannerPage() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editingDate, setEditingDate] = useState<Date>();
+  const [editingAccount, setEditingAccount] = useState<string>();
+  const [editingImage, setEditingImage] = useState<File | null>(null);
+  const [editingPreviewUrl, setEditingPreviewUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: posts } = useQuery<(Post & { account: SocialAccount; lastEditedBy?: User })[]>({
@@ -46,7 +61,7 @@ export default function PostPlannerPage() {
   });
   const { data: accounts } = useQuery<SocialAccount[]>({ queryKey: ["/api/social-accounts"] });
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>, isEditing = false) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -59,10 +74,15 @@ export default function PostPlannerPage() {
       return;
     }
 
-    setSelectedImage(file);
-    // Erstelle eine URL für die Vorschau
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
+    if (isEditing) {
+      setEditingImage(file);
+      const url = URL.createObjectURL(file);
+      setEditingPreviewUrl(url);
+    } else {
+      setSelectedImage(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
   };
 
   const createPostMutation = useMutation({
@@ -101,19 +121,48 @@ export default function PostPlannerPage() {
   });
 
   const updatePostMutation = useMutation({
-    mutationFn: async ({ id, content }: { id: number; content: string }) => {
-      const res = await apiRequest("PATCH", `/api/posts/${id}`, { content });
+    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
+      const formData = new FormData();
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value !== undefined) {
+          if (value instanceof Date) {
+            formData.append(key, value.toISOString());
+          } else if (value instanceof File) {
+            formData.append(key, value);
+          } else {
+            formData.append(key, String(value));
+          }
+        }
+      });
+
+      const res = await fetch(`/api/posts/${id}`, {
+        method: "PATCH",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Fehler beim Aktualisieren des Posts");
+      }
+
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
-      setEditingPost(null);
+      resetEditingState();
       toast({
         title: "Post aktualisiert",
         description: "Der Post wurde erfolgreich aktualisiert",
       });
     },
   });
+
+  const resetEditingState = () => {
+    setEditingPost(null);
+    setEditingDate(undefined);
+    setEditingAccount(undefined);
+    setEditingImage(null);
+    setEditingPreviewUrl(null);
+  };
 
   const approvePostMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -276,7 +325,10 @@ export default function PostPlannerPage() {
                           <>
                             <span>•</span>
                             <span>
-                              Bearbeitet von <span className="font-semibold text-primary">{post.lastEditedBy.username}</span>{" "}
+                              Bearbeitet von{" "}
+                              <span className="font-semibold text-primary">
+                                {post.lastEditedBy.username}
+                              </span>{" "}
                               {formatDistance(new Date(post.lastEditedAt), new Date(), {
                                 locale: de,
                                 addSuffix: true,
@@ -316,8 +368,8 @@ export default function PostPlannerPage() {
         </div>
       </main>
 
-      <Dialog open={!!editingPost} onOpenChange={() => setEditingPost(null)}>
-        <DialogContent>
+      <Dialog open={!!editingPost} onOpenChange={(open) => !open && resetEditingState()}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Post bearbeiten</DialogTitle>
           </DialogHeader>
@@ -329,18 +381,159 @@ export default function PostPlannerPage() {
               }
               rows={8}
             />
-            <Button onClick={() => {
-                if (editingPost) {
-                  updatePostMutation.mutate({
-                    id: editingPost.id,
-                    content: editingPost.content,
-                  });
-                }
-              }}
-              disabled={updatePostMutation.isPending}
-            >
-              Speichern
-            </Button>
+
+            <div className="space-y-2">
+              <Label>Account</Label>
+              <Select
+                value={editingAccount || editingPost?.accountId?.toString()}
+                onValueChange={setEditingAccount}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Account auswählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts?.map((account) => (
+                    <SelectItem key={account.id} value={account.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        {account.platform === "LinkedIn" && <Linkedin className="h-4 w-4" />}
+                        {account.accountName}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Veröffentlichungsdatum</Label>
+              <Calendar
+                mode="single"
+                selected={editingDate || (editingPost ? new Date(editingPost.scheduledDate) : undefined)}
+                onSelect={setEditingDate}
+                className="rounded-md border"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Bild</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleImageChange(e, true)}
+                className="cursor-pointer"
+              />
+              {(editingPreviewUrl || editingPost?.imageUrl) && (
+                <div className="mt-2 relative w-full aspect-video">
+                  <img
+                    src={editingPreviewUrl || editingPost?.imageUrl}
+                    alt="Vorschau"
+                    className="rounded-lg object-cover w-full h-full"
+                  />
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="absolute top-2 right-2"
+                    onClick={() => {
+                      setEditingImage(null);
+                      setEditingPreviewUrl(null);
+                      if (editingPost) {
+                        setEditingPost({ ...editingPost, imageUrl: null });
+                      }
+                    }}
+                  >
+                    Entfernen
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* LinkedIn spezifische Optionen */}
+            {editingPost?.account?.platform === "LinkedIn" && (
+              <>
+                <div className="space-y-2">
+                  <Label>Sichtbarkeit</Label>
+                  <Select
+                    value={editingPost.visibility}
+                    onValueChange={(value) =>
+                      setEditingPost(editingPost ? { ...editingPost, visibility: value } : null)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sichtbarkeit wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VISIBILITIES.map(({ value, label }) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Post-Typ</Label>
+                  <Select
+                    value={editingPost.postType}
+                    onValueChange={(value) =>
+                      setEditingPost(editingPost ? { ...editingPost, postType: value } : null)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Post-Typ wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {POST_TYPES.map(({ value, label }) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {editingPost.postType === "article" && (
+                  <div className="space-y-2">
+                    <Label>Artikel-URL</Label>
+                    <Input
+                      type="url"
+                      value={editingPost.articleUrl || ""}
+                      onChange={(e) =>
+                        setEditingPost({ ...editingPost, articleUrl: e.target.value })
+                      }
+                      placeholder="https://..."
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={resetEditingState}>
+                Abbrechen
+              </Button>
+              <Button
+                onClick={() => {
+                  if (editingPost) {
+                    updatePostMutation.mutate({
+                      id: editingPost.id,
+                      updates: {
+                        content: editingPost.content,
+                        accountId: editingAccount || editingPost.accountId,
+                        scheduledDate: editingDate || editingPost.scheduledDate,
+                        image: editingImage,
+                        visibility: editingPost.visibility,
+                        postType: editingPost.postType,
+                        articleUrl: editingPost.articleUrl,
+                      },
+                    });
+                  }
+                }}
+                disabled={updatePostMutation.isPending}
+              >
+                Speichern
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

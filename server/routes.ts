@@ -113,6 +113,12 @@ export function registerRoutes(app: Express): Server {
       const post = await storage.updatePost(Number(req.params.id), {
         content: req.body.content,
         userId: req.user.id,
+        scheduledDate: new Date(req.body.scheduledDate),
+        accountId: Number(req.body.accountId),
+        imageUrl: req.body.imageUrl,
+        visibility: req.body.visibility,
+        postType: req.body.postType,
+        articleUrl: req.body.articleUrl,
       });
       res.json(post);
     } catch (error) {
