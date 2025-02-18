@@ -48,7 +48,7 @@ export const todosRelations = relations(todos, ({ one }) => ({
   }),
 }));
 
-// Im posts-Table das imageUrl Feld hinzufügen
+// Im posts-Table das imageUrl Feld hinzufügen and accountId
 export const posts = pgTable("posts", {
   id: serial("id").primaryKey(),
   content: text("content").notNull(),
@@ -56,6 +56,7 @@ export const posts = pgTable("posts", {
   scheduledDate: timestamp("scheduled_date").notNull(),
   approved: boolean("approved").notNull().default(false),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  accountId: integer("account_id").notNull().references(() => socialAccounts.id, { onDelete: "cascade" }),
 });
 
 // Verbindungstabelle zwischen Posts und Social Accounts
@@ -65,12 +66,15 @@ export const postAccounts = pgTable("post_accounts", {
   accountId: integer("account_id").notNull().references(() => socialAccounts.id, { onDelete: "cascade" }),
 });
 
-export const postsRelations = relations(posts, ({ one, many }) => ({
+export const postsRelations = relations(posts, ({ one }) => ({
   user: one(users, {
     fields: [posts.userId],
     references: [users.id],
   }),
-  accounts: many(postAccounts),
+  account: one(socialAccounts, {
+    fields: [posts.accountId],
+    references: [socialAccounts.id],
+  }),
 }));
 
 export const newsletters = pgTable("newsletters", {

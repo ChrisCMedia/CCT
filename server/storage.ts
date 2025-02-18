@@ -20,7 +20,7 @@ export interface IStorage {
 
   // Post operations
   getPosts(): Promise<Post[]>;
-  createPost(post: { content: string; scheduledDate: Date; userId: number; accountIds: number[] }): Promise<Post>;
+  createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
 
@@ -88,20 +88,8 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(posts);
   }
 
-  async createPost(post: { content: string; scheduledDate: Date; userId: number; accountIds: number[] }): Promise<Post> {
-    const { accountIds, ...postData } = post;
-
-    const [newPost] = await db.insert(posts).values(postData).returning();
-
-    await Promise.all(
-      accountIds.map((accountId) =>
-        db.insert(postAccounts).values({
-          postId: newPost.id,
-          accountId,
-        })
-      )
-    );
-
+  async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
+    const [newPost] = await db.insert(posts).values(post).returning();
     return newPost;
   }
 

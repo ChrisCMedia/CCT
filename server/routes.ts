@@ -94,7 +94,7 @@ export function registerRoutes(app: Express): Server {
       const postData = {
         content: req.body.content,
         scheduledDate: new Date(req.body.scheduledDate),
-        accountIds: req.body.accountIds.map(Number),
+        accountId: Number(req.body.accountIds[0]), // Nimm den ersten Account aus der Liste
         imageUrl,
         userId: req.user.id,
       };
