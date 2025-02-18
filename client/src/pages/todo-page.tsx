@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { de } from "date-fns/locale";
 import {
   Select,
   SelectContent,
@@ -17,10 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
+import { CalendarIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 export default function TodoPage() {
   const [newTodo, setNewTodo] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [deadline, setDeadline] = useState<Date>();
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
 
@@ -35,7 +42,7 @@ export default function TodoPage() {
   });
 
   const createTodoMutation = useMutation({
-    mutationFn: async (data: { title: string; description: string; assignedToUserId?: number }) => {
+    mutationFn: async (data: { title: string; description: string; deadline?: Date; assignedToUserId?: number }) => {
       const res = await apiRequest("POST", "/api/todos", data);
       return res.json();
     },
@@ -43,6 +50,7 @@ export default function TodoPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/todos"] });
       setNewTodo("");
       setNewDescription("");
+      setDeadline(undefined);
       toast({
         title: "Aufgabe erstellt",
         description: "Die neue Aufgabe wurde erfolgreich hinzugefügt",
@@ -140,12 +148,37 @@ export default function TodoPage() {
                   rows={3}
                 />
               </div>
+              <div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !deadline && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {deadline ? format(deadline, "PPP", { locale: de }) : "Deadline wählen"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={deadline}
+                      onSelect={setDeadline}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
               <Button
                 onClick={() => 
                   newTodo.trim() && 
                   createTodoMutation.mutate({ 
                     title: newTodo.trim(), 
-                    description: newDescription.trim() 
+                    description: newDescription.trim(),
+                    deadline: deadline,
                   })
                 }
                 disabled={!newTodo.trim() || createTodoMutation.isPending}
@@ -209,6 +242,11 @@ export default function TodoPage() {
                   {todo.description && (
                     <p className="text-sm text-gray-600 ml-10">
                       {todo.description}
+                    </p>
+                  )}
+                  {todo.deadline && (
+                    <p className="text-sm text-blue-600 ml-10">
+                      Deadline: {format(new Date(todo.deadline), "PPP", { locale: de })}
                     </p>
                   )}
                   {todo.assignedTo && (
