@@ -7,24 +7,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
 export default function TodoPage() {
   const [newTodo, setNewTodo] = useState("");
+  const [newDescription, setNewDescription] = useState("");
   const { toast } = useToast();
   const { data: todos } = useQuery<Todo[]>({ 
     queryKey: ["/api/todos"],
-    staleTime: 0, // Immer aktuelle Daten laden
+    staleTime: 0,
   });
 
   const createTodoMutation = useMutation({
-    mutationFn: async (title: string) => {
-      const res = await apiRequest("POST", "/api/todos", { title });
+    mutationFn: async (data: { title: string; description: string }) => {
+      const res = await apiRequest("POST", "/api/todos", data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/todos"] });
       setNewTodo("");
+      setNewDescription("");
       toast({
         title: "Aufgabe erstellt",
         description: "Die neue Aufgabe wurde erfolgreich hinzugefügt",
@@ -85,19 +88,30 @@ export default function TodoPage() {
             <CardTitle>Aufgabenliste</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-4 mb-6">
-              <Input
-                placeholder="Neue Aufgabe hinzufügen..."
-                value={newTodo}
-                onChange={(e) => setNewTodo(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && newTodo.trim()) {
-                    createTodoMutation.mutate(newTodo.trim());
-                  }
-                }}
-              />
+            <div className="space-y-4 mb-6">
+              <div>
+                <Input
+                  placeholder="Neue Aufgabe hinzufügen..."
+                  value={newTodo}
+                  onChange={(e) => setNewTodo(e.target.value)}
+                />
+              </div>
+              <div>
+                <Textarea
+                  placeholder="Beschreibung der Aufgabe..."
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
               <Button
-                onClick={() => newTodo.trim() && createTodoMutation.mutate(newTodo.trim())}
+                onClick={() => 
+                  newTodo.trim() && 
+                  createTodoMutation.mutate({ 
+                    title: newTodo.trim(), 
+                    description: newDescription.trim() 
+                  })
+                }
                 disabled={!newTodo.trim() || createTodoMutation.isPending}
               >
                 Hinzufügen
@@ -108,31 +122,38 @@ export default function TodoPage() {
               {todos?.map((todo) => (
                 <li
                   key={todo.id}
-                  className="flex items-center gap-4 p-2 hover:bg-gray-50 rounded-lg"
+                  className="flex flex-col gap-2 p-4 hover:bg-gray-50 rounded-lg border"
                 >
-                  <Checkbox
-                    checked={todo.completed}
-                    onCheckedChange={(checked) =>
-                      toggleTodoMutation.mutate({
-                        id: todo.id,
-                        completed: checked as boolean,
-                      })
-                    }
-                  />
-                  <span
-                    className={`flex-1 ${
-                      todo.completed ? "line-through text-gray-400" : ""
-                    }`}
-                  >
-                    {todo.title}
-                  </span>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => deleteTodoMutation.mutate(todo.id)}
-                  >
-                    Löschen
-                  </Button>
+                  <div className="flex items-center gap-4">
+                    <Checkbox
+                      checked={todo.completed}
+                      onCheckedChange={(checked) =>
+                        toggleTodoMutation.mutate({
+                          id: todo.id,
+                          completed: checked as boolean,
+                        })
+                      }
+                    />
+                    <span
+                      className={`flex-1 ${
+                        todo.completed ? "line-through text-gray-400" : "font-medium"
+                      }`}
+                    >
+                      {todo.title}
+                    </span>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => deleteTodoMutation.mutate(todo.id)}
+                    >
+                      Löschen
+                    </Button>
+                  </div>
+                  {todo.description && (
+                    <p className="text-sm text-gray-600 ml-10">
+                      {todo.description}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

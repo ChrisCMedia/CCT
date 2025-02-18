@@ -32,9 +32,11 @@ export const socialAccountsRelations = relations(socialAccounts, ({ one, many })
   posts: many(postAccounts),
 }));
 
+// Im todos-Table das description Feld hinzufügen
 export const todos = pgTable("todos", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
+  description: text("description"),
   completed: boolean("completed").notNull().default(false),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
 });
@@ -94,8 +96,10 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
 });
 
+// Das insertTodoSchema aktualisieren
 export const insertTodoSchema = createInsertSchema(todos).pick({
   title: true,
+  description: true,
 });
 
 export const insertPostSchema = createInsertSchema(posts)
