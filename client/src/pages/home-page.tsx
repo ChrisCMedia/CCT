@@ -54,7 +54,7 @@ export default function HomePage() {
                     </p>
                     <div className="flex gap-2 text-xs text-gray-400">
                       <span>
-                        {format(new Date(post.scheduledDate), "dd.MM.yyyy HH:mm")}
+                        {format(new Date(post.scheduledDate), "dd.MM.yyyy")}
                       </span>
                       <span>•</span>
                       <span>

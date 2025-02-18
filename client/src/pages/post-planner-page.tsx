@@ -273,7 +273,7 @@ export default function PostPlannerPage() {
                       <div>Geplant für: {format(new Date(post.scheduledDate), "PP")}</div>
                       {post.lastEditedAt && post.lastEditedBy && (
                         <div>
-                          Zuletzt bearbeitet von {post.lastEditedBy.username} vor{" "}
+                          Zuletzt bearbeitet von <span className="font-medium">{post.lastEditedBy.username}</span>{" "}
                           {formatDistance(new Date(post.lastEditedAt), new Date(), {
                             locale: de,
                             addSuffix: true,
