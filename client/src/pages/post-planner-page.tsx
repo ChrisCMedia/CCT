@@ -255,7 +255,7 @@ export default function PostPlannerPage() {
                   <div key={post.id} className="p-4 border rounded-lg space-y-2">
                     <div className="flex items-center justify-between">
                       <Badge variant="outline" className="mb-2">
-                        {post.account?.platform}: {post.account?.accountName}
+                        {post.account?.platform}
                       </Badge>
                       <Button size="icon" variant="ghost" onClick={() => setEditingPost(post)}>
                         <Pencil className="h-4 w-4" />
