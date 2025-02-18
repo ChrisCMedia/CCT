@@ -28,6 +28,20 @@ export function registerRoutes(app: Express): Server {
   // Serve uploaded files
   app.use("/uploads", express.static("uploads"));
 
+  // Get all users for assignment
+  app.get("/api/users", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const users = await storage.getUsers();
+      // Remove passwords from response
+      const safeUsers = users.map(({ password, ...user }) => user);
+      res.json(safeUsers);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
   // Todo routes
   app.get("/api/todos", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -45,7 +59,14 @@ export function registerRoutes(app: Express): Server {
     try {
       const parsed = insertTodoSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json(parsed.error);
-      const todo = await storage.createTodo({ ...parsed.data, userId: req.user.id });
+
+      const todoData = {
+        ...parsed.data,
+        userId: req.user.id,
+        deadline: parsed.data.deadline ? new Date(parsed.data.deadline) : undefined,
+      };
+
+      const todo = await storage.createTodo(todoData);
       res.json(todo);
     } catch (error) {
       console.error("Error creating todo:", error);
@@ -56,7 +77,11 @@ export function registerRoutes(app: Express): Server {
   app.patch("/api/todos/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const todo = await storage.updateTodo(Number(req.params.id), req.body.completed);
+      const todo = await storage.updateTodo(Number(req.params.id), {
+        completed: req.body.completed,
+        deadline: req.body.deadline ? new Date(req.body.deadline) : undefined,
+        assignedToUserId: req.body.assignedToUserId,
+      });
       res.json(todo);
     } catch (error) {
       console.error("Error updating todo:", error);
@@ -74,6 +99,47 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: "Failed to delete todo" });
     }
   });
+
+  // New Subtask-Routes
+  app.post("/api/todos/:todoId/subtasks", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const subtask = await storage.createSubtask({
+        title: req.body.title,
+        todoId: Number(req.params.todoId),
+      });
+      res.json(subtask);
+    } catch (error) {
+      console.error("Error creating subtask:", error);
+      res.status(500).json({ message: "Failed to create subtask" });
+    }
+  });
+
+  app.patch("/api/subtasks/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const subtask = await storage.updateSubtask(
+        Number(req.params.id),
+        req.body.completed
+      );
+      res.json(subtask);
+    } catch (error) {
+      console.error("Error updating subtask:", error);
+      res.status(500).json({ message: "Failed to update subtask" });
+    }
+  });
+
+  app.delete("/api/subtasks/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      await storage.deleteSubtask(Number(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting subtask:", error);
+      res.status(500).json({ message: "Failed to delete subtask" });
+    }
+  });
+
 
   // Post routes
   app.get("/api/posts", async (req, res) => {

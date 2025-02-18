@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Todo } from "@shared/schema";
+import { Todo, User } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import Navbar from "@/components/layout/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,18 +9,33 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function TodoPage() {
   const [newTodo, setNewTodo] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
+
   const { data: todos } = useQuery<Todo[]>({ 
     queryKey: ["/api/todos"],
     staleTime: 0,
   });
 
+  const { data: users } = useQuery<Omit<User, "password">[]>({
+    queryKey: ["/api/users"],
+    staleTime: 0,
+  });
+
   const createTodoMutation = useMutation({
-    mutationFn: async (data: { title: string; description: string }) => {
+    mutationFn: async (data: { title: string; description: string; assignedToUserId?: number }) => {
       const res = await apiRequest("POST", "/api/todos", data);
       return res.json();
     },
@@ -54,6 +69,27 @@ export default function TodoPage() {
       toast({
         title: "Fehler",
         description: "Status konnte nicht geändert werden: " + error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const assignTodoMutation = useMutation({
+    mutationFn: async ({ id, assignedToUserId }: { id: number; assignedToUserId?: number }) => {
+      const res = await apiRequest("PATCH", `/api/todos/${id}`, { assignedToUserId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/todos"] });
+      toast({
+        title: "Aufgabe zugewiesen",
+        description: "Die Aufgabe wurde erfolgreich zugewiesen",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Fehler",
+        description: "Die Aufgabe konnte nicht zugewiesen werden: " + error.message,
         variant: "destructive",
       });
     },
@@ -141,6 +177,27 @@ export default function TodoPage() {
                     >
                       {todo.title}
                     </span>
+                    <Select
+                      value={todo.assignedToUserId?.toString()}
+                      onValueChange={(value) =>
+                        assignTodoMutation.mutate({
+                          id: todo.id,
+                          assignedToUserId: value ? Number(value) : undefined,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Benutzer zuweisen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Nicht zugewiesen</SelectItem>
+                        {users?.map((user) => (
+                          <SelectItem key={user.id} value={user.id.toString()}>
+                            {user.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       variant="destructive"
                       size="sm"
@@ -152,6 +209,11 @@ export default function TodoPage() {
                   {todo.description && (
                     <p className="text-sm text-gray-600 ml-10">
                       {todo.description}
+                    </p>
+                  )}
+                  {todo.assignedTo && (
+                    <p className="text-sm text-blue-600 ml-10">
+                      Zugewiesen an: {todo.assignedTo.username}
                     </p>
                   )}
                 </li>

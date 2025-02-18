@@ -11,22 +11,22 @@ export const users = pgTable("users", {
 
 export const usersRelations = relations(users, ({ many }) => ({
   todos: many(todos),
+  assignedTodos: many(todos, { relationName: "assignedTodos" }),
   posts: many(posts),
   newsletters: many(newsletters),
   socialAccounts: many(socialAccounts),
 }));
 
-// Neue Tabelle für Social Media Accounts
 export const socialAccounts = pgTable("social_accounts", {
   id: serial("id").primaryKey(),
-  platform: text("platform").notNull(), // "LinkedIn", "Instagram", "Facebook", etc.
+  platform: text("platform").notNull(),
   accountName: text("account_name").notNull(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   tokenExpiresAt: timestamp("token_expires_at"),
-  platformUserId: text("platform_user_id"), // LinkedIn User ID
-  platformPageId: text("platform_page_id"), // LinkedIn Page/Company ID if applicable
+  platformUserId: text("platform_user_id"),
+  platformPageId: text("platform_page_id"),
 });
 
 export const socialAccountsRelations = relations(socialAccounts, ({ one, many }) => ({
@@ -37,23 +37,43 @@ export const socialAccountsRelations = relations(socialAccounts, ({ one, many })
   posts: many(postAccounts),
 }));
 
-// Im todos-Table das description Feld hinzufügen
 export const todos = pgTable("todos", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description"),
   completed: boolean("completed").notNull().default(false),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  assignedToUserId: integer("assigned_to_user_id").references(() => users.id),
+  deadline: timestamp("deadline"),
 });
 
-export const todosRelations = relations(todos, ({ one }) => ({
+export const subtasks = pgTable("subtasks", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  completed: boolean("completed").notNull().default(false),
+  todoId: integer("todo_id").notNull().references(() => todos.id, { onDelete: "cascade" }),
+});
+
+export const todosRelations = relations(todos, ({ one, many }) => ({
   user: one(users, {
     fields: [todos.userId],
     references: [users.id],
   }),
+  assignedTo: one(users, {
+    fields: [todos.assignedToUserId],
+    references: [users.id],
+    relationName: "assignedTodos",
+  }),
+  subtasks: many(subtasks),
 }));
 
-// Im posts-Table das imageUrl Feld hinzufügen and accountId
+export const subtasksRelations = relations(subtasks, ({ one }) => ({
+  todo: one(todos, {
+    fields: [subtasks.todoId],
+    references: [todos.id],
+  }),
+}));
+
 export const posts = pgTable("posts", {
   id: serial("id").primaryKey(),
   content: text("content").notNull(),
@@ -64,22 +84,20 @@ export const posts = pgTable("posts", {
   accountId: integer("account_id").notNull().references(() => socialAccounts.id, { onDelete: "cascade" }),
   lastEditedAt: timestamp("last_edited_at"),
   lastEditedByUserId: integer("last_edited_by_user_id").references(() => users.id),
-  platformPostId: text("platform_post_id"), // LinkedIn post ID after publishing
-  visibility: text("visibility").default("public"), // public, connections, private
-  articleUrl: text("article_url"), // For LinkedIn articles
-  postType: text("post_type").default("post"), // post, article, poll, etc.
-  publishStatus: text("publish_status").default("draft"), // draft, scheduled, published, failed
-  failureReason: text("failure_reason"), // Store error message if publishing fails
+  platformPostId: text("platform_post_id"),
+  visibility: text("visibility").default("public"),
+  articleUrl: text("article_url"),
+  postType: text("post_type").default("post"),
+  publishStatus: text("publish_status").default("draft"),
+  failureReason: text("failure_reason"),
 });
 
-// Verbindungstabelle zwischen Posts und Social Accounts
 export const postAccounts = pgTable("post_accounts", {
   id: serial("id").primaryKey(),
   postId: integer("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
   accountId: integer("account_id").notNull().references(() => socialAccounts.id, { onDelete: "cascade" }),
 });
 
-// Add analytics table for tracking post performance
 export const postAnalytics = pgTable("post_analytics", {
   id: serial("id").primaryKey(),
   postId: integer("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
@@ -89,11 +107,10 @@ export const postAnalytics = pgTable("post_analytics", {
   shares: integer("shares").default(0),
   comments: integer("comments").default(0),
   engagementRate: integer("engagement_rate").default(0),
-  demographicData: jsonb("demographic_data"), // Store LinkedIn demographic insights
+  demographicData: jsonb("demographic_data"),
   updatedAt: timestamp("updated_at").notNull(),
 });
 
-// Add relations for analytics
 export const postsRelations = relations(posts, ({ one, many }) => ({
   user: one(users, {
     fields: [posts.userId],
@@ -120,7 +137,6 @@ export const postAnalyticsRelations = relations(postAnalytics, ({ one }) => ({
   }),
 }));
 
-
 export const newsletters = pgTable("newsletters", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -135,14 +151,13 @@ export const newslettersRelations = relations(newsletters, ({ one }) => ({
   }),
 }));
 
-// Schema für Social Account Erstellung
 export const insertSocialAccountSchema = createInsertSchema(socialAccounts)
   .pick({
     platform: true,
     accountName: true,
   })
   .extend({
-    code: z.string().optional(), // For OAuth flow
+    code: z.string().optional(),
   });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -150,10 +165,22 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
 });
 
-// Das insertTodoSchema aktualisieren
-export const insertTodoSchema = createInsertSchema(todos).pick({
+export const insertTodoSchema = createInsertSchema(todos)
+  .pick({
+    title: true,
+    description: true,
+    deadline: true,
+    assignedToUserId: true,
+  })
+  .extend({
+    deadline: z.string().optional(),
+    subtasks: z.array(z.string()).optional(),
+    assignedToUserId: z.number().optional(),
+  });
+
+export const insertSubtaskSchema = createInsertSchema(subtasks).pick({
   title: true,
-  description: true,
+  todoId: true,
 });
 
 export const insertPostSchema = createInsertSchema(posts)
@@ -178,7 +205,10 @@ export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
-export type Todo = typeof todos.$inferSelect;
+export type Todo = typeof todos.$inferSelect & {
+  subtasks?: SubTask[];
+  assignedTo?: User;
+};
 export type Post = typeof posts.$inferSelect & {
   account?: SocialAccount;
   lastEditedBy?: User;
@@ -189,3 +219,4 @@ export type SocialAccount = typeof socialAccounts.$inferSelect;
 export type InsertSocialAccount = z.infer<typeof insertSocialAccountSchema>;
 export type InsertPost = z.infer<typeof insertPostSchema>;
 export type PostAnalytics = typeof postAnalytics.$inferSelect;
+export type SubTask = typeof subtasks.$inferSelect;

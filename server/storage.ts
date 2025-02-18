@@ -1,4 +1,4 @@
-import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount } from "@shared/schema";
+import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask } from "@shared/schema";
 import { db } from "./db";
 import { eq, asc } from "drizzle-orm";
 import session from "express-session";
@@ -11,11 +11,23 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getUsers(): Promise<User[]>;
 
   // Todo operations
-  getTodos(): Promise<Todo[]>;
-  createTodo(todo: { title: string; userId: number }): Promise<Todo>;
-  updateTodo(id: number, completed: boolean): Promise<Todo>;
+  getTodos(): Promise<(Todo & { subtasks: SubTask[]; assignedTo?: User })[]>;
+  createTodo(todo: { 
+    title: string; 
+    userId: number; 
+    description?: string; 
+    deadline?: Date; 
+    subtasks?: string[];
+    assignedToUserId?: number;
+  }): Promise<Todo>;
+  updateTodo(id: number, data: { 
+    completed?: boolean; 
+    deadline?: Date;
+    assignedToUserId?: number;
+  }): Promise<Todo>;
   deleteTodo(id: number): Promise<void>;
 
   // Post operations
@@ -76,6 +88,10 @@ export interface IStorage {
   }): Promise<void>;
 
   sessionStore: session.Store;
+  // Neue Subtask-Operationen
+  createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask>;
+  updateSubtask(id: number, completed: boolean): Promise<SubTask>;
+  deleteSubtask(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -87,6 +103,10 @@ export class DatabaseStorage implements IStorage {
       tableName: "user_sessions",
       createTableIfMissing: true,
     });
+  }
+
+  async getUsers(): Promise<User[]> {
+    return db.select().from(users);
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -104,19 +124,67 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getTodos(): Promise<Todo[]> {
-    return db.select().from(todos);
+  async getTodos(): Promise<(Todo & { subtasks: SubTask[]; assignedTo?: User })[]> {
+    const result = await db
+      .select({
+        todo: todos,
+        subtask: subtasks,
+        assignedTo: users,
+      })
+      .from(todos)
+      .leftJoin(subtasks, eq(todos.id, subtasks.todoId))
+      .leftJoin(users, eq(todos.assignedToUserId, users.id));
+
+    const todosMap = new Map<number, Todo & { subtasks: SubTask[]; assignedTo?: User }>();
+
+    for (const row of result) {
+      if (!todosMap.has(row.todo.id)) {
+        todosMap.set(row.todo.id, {
+          ...row.todo,
+          subtasks: [],
+          assignedTo: row.assignedTo || undefined,
+        });
+      }
+
+      if (row.subtask) {
+        todosMap.get(row.todo.id)!.subtasks.push(row.subtask);
+      }
+    }
+
+    return Array.from(todosMap.values());
   }
 
-  async createTodo(todo: { title: string; userId: number }): Promise<Todo> {
-    const [newTodo] = await db.insert(todos).values(todo).returning();
+  async createTodo(todo: { 
+    title: string; 
+    userId: number; 
+    description?: string; 
+    deadline?: Date;
+    subtasks?: string[];
+    assignedToUserId?: number;
+  }): Promise<Todo> {
+    const { subtasks: subtaskTitles, ...todoData } = todo;
+    const [newTodo] = await db.insert(todos).values(todoData).returning();
+
+    if (subtaskTitles?.length) {
+      await db.insert(subtasks).values(
+        subtaskTitles.map(title => ({
+          title,
+          todoId: newTodo.id,
+        }))
+      );
+    }
+
     return newTodo;
   }
 
-  async updateTodo(id: number, completed: boolean): Promise<Todo> {
+  async updateTodo(id: number, data: { 
+    completed?: boolean; 
+    deadline?: Date;
+    assignedToUserId?: number;
+  }): Promise<Todo> {
     const [todo] = await db
       .update(todos)
-      .set({ completed })
+      .set(data)
       .where(eq(todos.id, id))
       .returning();
     return todo;
@@ -300,6 +368,24 @@ export class DatabaseStorage implements IStorage {
       .from(posts)
       .where(eq(posts.id, id));
     return post;
+  }
+
+  async createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask> {
+    const [newSubtask] = await db.insert(subtasks).values(subtask).returning();
+    return newSubtask;
+  }
+
+  async updateSubtask(id: number, completed: boolean): Promise<SubTask> {
+    const [subtask] = await db
+      .update(subtasks)
+      .set({ completed })
+      .where(eq(subtasks.id, id))
+      .returning();
+    return subtask;
+  }
+
+  async deleteSubtask(id: number): Promise<void> {
+    await db.delete(subtasks).where(eq(subtasks.id, id));
   }
 }
 
