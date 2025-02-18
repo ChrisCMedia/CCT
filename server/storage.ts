@@ -1,6 +1,6 @@
 import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, type SocialAccount, type InsertSocialAccount } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -95,7 +95,7 @@ export class DatabaseStorage implements IStorage {
       .from(posts)
       .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
       .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
-      .orderBy(desc(posts.scheduledDate));
+      .orderBy(asc(posts.scheduledDate));
   }
 
   async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
