@@ -28,6 +28,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in Bytes
 
@@ -55,11 +65,17 @@ export default function PostPlannerPage() {
   const [editingImage, setEditingImage] = useState<File | null>(null);
   const [editingPreviewUrl, setEditingPreviewUrl] = useState<string | null>(null);
   const { toast } = useToast();
+  const [showDeletedPosts, setShowDeletedPosts] = useState(false);
+  const [postToDelete, setPostToDelete] = useState<Post | null>(null);
 
   const { data: posts } = useQuery<(Post & { account: SocialAccount; lastEditedBy?: User })[]>({
     queryKey: ["/api/posts"],
   });
   const { data: accounts } = useQuery<SocialAccount[]>({ queryKey: ["/api/social-accounts"] });
+  const { data: deletedPosts } = useQuery<(Post & { account: SocialAccount; lastEditedBy?: User })[]>({
+    queryKey: ["/api/posts/deleted"],
+    enabled: showDeletedPosts,
+  });
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>, isEditing = false) => {
     const file = event.target.files?.[0];
@@ -200,6 +216,7 @@ export default function PostPlannerPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts/deleted"] });
     },
   });
 
@@ -213,6 +230,21 @@ export default function PostPlannerPage() {
       toast({
         title: "Genehmigung zurückgezogen",
         description: "Die Genehmigung des Posts wurde zurückgezogen",
+      });
+    },
+  });
+
+  const restorePostMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("PATCH", `/api/posts/${id}/restore`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts/deleted"] });
+      toast({
+        title: "Post wiederhergestellt",
+        description: "Der Post wurde erfolgreich wiederhergestellt",
       });
     },
   });
@@ -368,13 +400,37 @@ export default function PostPlannerPage() {
                           Genehmigen
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => deletePostMutation.mutate(post.id)}
-                      >
-                        Löschen
-                      </Button>
+                      <AlertDialog open={!!postToDelete} onOpenChange={(open) => !open && setPostToDelete(null)}>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => setPostToDelete(post)}
+                        >
+                          Löschen
+                        </Button>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Post löschen</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Möchten Sie diesen Post wirklich löschen?
+                              Sie können gelöschte Posts später wiederherstellen.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => {
+                                if (postToDelete) {
+                                  deletePostMutation.mutate(postToDelete.id);
+                                  setPostToDelete(null);
+                                }
+                              }}
+                            >
+                              Löschen
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                 ))}
@@ -553,6 +609,49 @@ export default function PostPlannerPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <div className="mt-8">
+        <Button
+          variant="outline"
+          onClick={() => setShowDeletedPosts(!showDeletedPosts)}
+        >
+          {showDeletedPosts ? "Gelöschte Posts ausblenden" : "Gelöschte Posts anzeigen"}
+        </Button>
+
+        {showDeletedPosts && deletedPosts && deletedPosts.length > 0 && (
+          <div className="mt-4 space-y-4">
+            <h3 className="text-lg font-semibold">Gelöschte Posts</h3>
+            {deletedPosts.map((post) => (
+              <div key={post.id} className="p-4 border rounded-lg space-y-2 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <Badge variant="outline" className="mb-2">
+                    {post.account?.platform}
+                  </Badge>
+                </div>
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">{post.content}</p>
+                {post.imageUrl && (
+                  <img
+                    src={post.imageUrl}
+                    alt="Post Bild"
+                    className="rounded-lg mt-2 w-full object-cover aspect-video"
+                  />
+                )}
+                <div className="text-xs space-y-1">
+                  <div className="text-gray-400">
+                    Geplant für: {format(new Date(post.scheduledDate), "PP")}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => restorePostMutation.mutate(post.id)}
+                >
+                  Wiederherstellen
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

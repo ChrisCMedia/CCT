@@ -1,6 +1,6 @@
 import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, isNotNull } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -49,6 +49,8 @@ export interface IStorage {
   approvePost(id: number): Promise<Post>;
   unapprovePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
+  restorePost(id: number): Promise<Post>;
+  getDeletedPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]>;
 
   // Newsletter operations
   getNewsletters(): Promise<Newsletter[]>;
@@ -203,12 +205,13 @@ export class DatabaseStorage implements IStorage {
       .from(posts)
       .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
       .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
+      .where(eq(posts.deletedAt, null))
       .orderBy(asc(posts.scheduledDate));
 
     return result.map(({ post, account, lastEditedBy }) => ({
       ...post,
       account: account!,
-      lastEditedBy,
+      lastEditedBy: lastEditedBy || undefined,
     }));
   }
 
@@ -270,7 +273,44 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deletePost(id: number): Promise<void> {
-    await db.delete(posts).where(eq(posts.id, id));
+    await db
+      .update(posts)
+      .set({ 
+        deletedAt: new Date(),
+        publishStatus: 'deleted'
+      })
+      .where(eq(posts.id, id));
+  }
+
+  async restorePost(id: number): Promise<Post> {
+    const [post] = await db
+      .update(posts)
+      .set({ 
+        deletedAt: null,
+        publishStatus: 'draft'
+      })
+      .where(eq(posts.id, id))
+      .returning();
+    return post;
+  }
+
+  async getDeletedPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]> {
+    const result = await db.select({
+      post: posts,
+      account: socialAccounts,
+      lastEditedBy: users,
+    })
+      .from(posts)
+      .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
+      .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
+      .where(isNotNull(posts.deletedAt))
+      .orderBy(asc(posts.scheduledDate));
+
+    return result.map(({ post, account, lastEditedBy }) => ({
+      ...post,
+      account: account!,
+      lastEditedBy: lastEditedBy || undefined,
+    }));
   }
 
   async getNewsletters(): Promise<Newsletter[]> {

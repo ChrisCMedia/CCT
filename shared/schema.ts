@@ -80,8 +80,8 @@ export const posts = pgTable("posts", {
   imageUrl: text("image_url"),
   scheduledDate: timestamp("scheduled_date").notNull(),
   approved: boolean("approved").notNull().default(false),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  accountId: integer("account_id").notNull().references(() => socialAccounts.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  accountId: integer("account_id").notNull().references(() => socialAccounts.id, { onDelete: "restrict" }),
   lastEditedAt: timestamp("last_edited_at"),
   lastEditedByUserId: integer("last_edited_by_user_id").references(() => users.id),
   platformPostId: text("platform_post_id"),
@@ -90,6 +90,7 @@ export const posts = pgTable("posts", {
   postType: text("post_type").default("post"),
   publishStatus: text("publish_status").default("draft"),
   failureReason: text("failure_reason"),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const postAccounts = pgTable("post_accounts", {
