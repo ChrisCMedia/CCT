@@ -1,4 +1,4 @@
-import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, type SocialAccount, type InsertSocialAccount } from "@shared/schema";
+import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount } from "@shared/schema";
 import { db } from "./db";
 import { eq, asc } from "drizzle-orm";
 import session from "express-session";
@@ -20,8 +20,9 @@ export interface IStorage {
 
   // Post operations
   getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]>;
+  getPost(id: number): Promise<Post | undefined>;
   createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post>;
-  updatePost(id: number, data: { content: string; userId: number }): Promise<Post>;
+  updatePost(id: number, data: { content: string; userId: number; platformPostId?: string; publishStatus?: string }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   unapprovePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
@@ -32,10 +33,36 @@ export interface IStorage {
   updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter>;
   deleteNewsletter(id: number): Promise<void>;
 
-  // Neue Social Media Account Operationen
+  // Social Media Account Operationen
   getSocialAccounts(): Promise<SocialAccount[]>;
-  createSocialAccount(account: InsertSocialAccount & { userId: number }): Promise<SocialAccount>;
+  getSocialAccount(id: number): Promise<SocialAccount | undefined>;
+  getSocialAccountByPlatformId(platformId: string, platform: string): Promise<SocialAccount | undefined>;
+  createSocialAccount(account: InsertSocialAccount & {
+    userId: number;
+    accessToken?: string;
+    refreshToken?: string;
+    tokenExpiresAt?: Date;
+    platformUserId?: string;
+    platformPageId?: string;
+  }): Promise<SocialAccount>;
+  updateSocialAccount(id: number, data: {
+    accessToken?: string;
+    refreshToken?: string;
+    tokenExpiresAt?: Date;
+  }): Promise<SocialAccount>;
   deleteSocialAccount(id: number): Promise<void>;
+
+  // Analytics operations
+  updatePostAnalytics(postId: number, data: {
+    impressions: number;
+    clicks: number;
+    likes: number;
+    shares: number;
+    comments: number;
+    engagementRate: number;
+    demographicData: any;
+    updatedAt: Date;
+  }): Promise<void>;
 
   sessionStore: session.Store;
 }
@@ -89,8 +116,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]> {
-    return db.select({
-      ...posts,
+    const result = await db.select({
+      post: posts,
       account: socialAccounts,
       lastEditedBy: users,
     })
@@ -98,6 +125,12 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
       .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
       .orderBy(asc(posts.scheduledDate));
+
+    return result.map(({ post, account, lastEditedBy }) => ({
+      ...post,
+      account: account!,
+      lastEditedBy,
+    }));
   }
 
   async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
@@ -105,13 +138,15 @@ export class DatabaseStorage implements IStorage {
     return newPost;
   }
 
-  async updatePost(id: number, data: { content: string; userId: number }): Promise<Post> {
+  async updatePost(id: number, data: { content: string; userId: number; platformPostId?: string; publishStatus?: string }): Promise<Post> {
     const [post] = await db
       .update(posts)
       .set({
         content: data.content,
         lastEditedAt: new Date(),
         lastEditedByUserId: data.userId,
+        ...(data.platformPostId && { platformPostId: data.platformPostId }),
+        ...(data.publishStatus && { publishStatus: data.publishStatus }),
       })
       .where(eq(posts.id, id))
       .returning();
@@ -166,13 +201,77 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(socialAccounts);
   }
 
-  async createSocialAccount(account: InsertSocialAccount & { userId: number }): Promise<SocialAccount> {
+  async getSocialAccount(id: number): Promise<SocialAccount | undefined> {
+    const [account] = await db
+      .select()
+      .from(socialAccounts)
+      .where(eq(socialAccounts.id, id));
+    return account;
+  }
+
+  async getSocialAccountByPlatformId(platformId: string, platform: string): Promise<SocialAccount | undefined> {
+    const [account] = await db
+      .select()
+      .from(socialAccounts)
+      .where(eq(socialAccounts.platformUserId, platformId))
+      .where(eq(socialAccounts.platform, platform));
+    return account;
+  }
+
+  async createSocialAccount(account: InsertSocialAccount & {
+    userId: number;
+    accessToken?: string;
+    refreshToken?: string;
+    tokenExpiresAt?: Date;
+    platformUserId?: string;
+    platformPageId?: string;
+  }): Promise<SocialAccount> {
     const [newAccount] = await db.insert(socialAccounts).values(account).returning();
     return newAccount;
   }
 
+  async updateSocialAccount(id: number, data: {
+    accessToken?: string;
+    refreshToken?: string;
+    tokenExpiresAt?: Date;
+  }): Promise<SocialAccount> {
+    const [account] = await db
+      .update(socialAccounts)
+      .set(data)
+      .where(eq(socialAccounts.id, id))
+      .returning();
+    return account;
+  }
+
   async deleteSocialAccount(id: number): Promise<void> {
     await db.delete(socialAccounts).where(eq(socialAccounts.id, id));
+  }
+
+  async updatePostAnalytics(postId: number, data: {
+    impressions: number;
+    clicks: number;
+    likes: number;
+    shares: number;
+    comments: number;
+    engagementRate: number;
+    demographicData: any;
+    updatedAt: Date;
+  }): Promise<void> {
+    await db
+      .insert(postAnalytics)
+      .values({ postId, ...data })
+      .onConflictDoUpdate({
+        target: [postAnalytics.postId],
+        set: data,
+      });
+  }
+
+  async getPost(id: number): Promise<Post | undefined> {
+    const [post] = await db
+      .select()
+      .from(posts)
+      .where(eq(posts.id, id));
+    return post;
   }
 }
 
