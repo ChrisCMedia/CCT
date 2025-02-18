@@ -122,47 +122,44 @@ export default function PostPlannerPage() {
 
   const updatePostMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
-      const formData = new FormData();
-
-      // Ensure content is always sent
-      formData.append("content", updates.content);
-
-      // Convert and append scheduledDate if it exists
-      if (updates.scheduledDate) {
-        formData.append("scheduledDate", updates.scheduledDate.toISOString());
-      }
-
-      // Convert and append accountId if it exists
-      if (updates.accountId) {
-        formData.append("accountId", updates.accountId.toString());
-      }
-
-      // Append other fields if they exist
+      // Wenn ein Bild dabei ist, FormData verwenden
       if (updates.image) {
+        const formData = new FormData();
+        formData.append("content", updates.content);
+        formData.append("scheduledDate", updates.scheduledDate.toISOString());
+        formData.append("accountId", updates.accountId.toString());
         formData.append("image", updates.image);
+
+        if (updates.visibility) formData.append("visibility", updates.visibility);
+        if (updates.postType) formData.append("postType", updates.postType);
+        if (updates.articleUrl) formData.append("articleUrl", updates.articleUrl);
+
+        const res = await fetch(`/api/posts/${id}`, {
+          method: "PATCH",
+          body: formData,
+        });
+
+        if (!res.ok) throw new Error("Fehler beim Aktualisieren des Posts");
+        return res.json();
       }
 
-      if (updates.visibility) {
-        formData.append("visibility", updates.visibility);
-      }
-
-      if (updates.postType) {
-        formData.append("postType", updates.postType);
-      }
-
-      if (updates.articleUrl) {
-        formData.append("articleUrl", updates.articleUrl);
-      }
-
+      // Ohne Bild, JSON verwenden
       const res = await fetch(`/api/posts/${id}`, {
         method: "PATCH",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: updates.content,
+          scheduledDate: updates.scheduledDate.toISOString(),
+          accountId: updates.accountId,
+          visibility: updates.visibility,
+          postType: updates.postType,
+          articleUrl: updates.articleUrl,
+        }),
       });
 
-      if (!res.ok) {
-        throw new Error("Fehler beim Aktualisieren des Posts");
-      }
-
+      if (!res.ok) throw new Error("Fehler beim Aktualisieren des Posts");
       return res.json();
     },
     onSuccess: () => {
