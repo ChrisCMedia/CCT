@@ -176,6 +176,12 @@ export function registerRoutes(app: Express): Server {
   app.patch("/api/posts/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
+      // Hole den existierenden Post
+      const existingPost = await storage.getPost(Number(req.params.id));
+      if (!existingPost) {
+        return res.status(404).json({ message: "Post nicht gefunden" });
+      }
+
       // Parse and validate the scheduled date
       let scheduledDate: Date | undefined;
       if (req.body.scheduledDate) {
@@ -189,17 +195,17 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      console.log("Updating post with date:", scheduledDate); // Debug logging
+      console.log("Request body:", req.body); // Debug logging
 
       const post = await storage.updatePost(Number(req.params.id), {
-        content: req.body.content,
+        content: req.body.content ?? existingPost.content,
         userId: req.user.id,
-        scheduledDate,
-        accountId: req.body.accountId ? Number(req.body.accountId) : undefined,
-        imageUrl: req.body.imageUrl,
-        visibility: req.body.visibility,
-        postType: req.body.postType,
-        articleUrl: req.body.articleUrl,
+        scheduledDate: scheduledDate ?? existingPost.scheduledDate,
+        accountId: req.body.accountId ? Number(req.body.accountId) : existingPost.accountId,
+        imageUrl: req.body.imageUrl ?? existingPost.imageUrl,
+        visibility: req.body.visibility ?? existingPost.visibility,
+        postType: req.body.postType ?? existingPost.postType,
+        articleUrl: req.body.articleUrl ?? existingPost.articleUrl,
       });
       res.json(post);
     } catch (error) {
