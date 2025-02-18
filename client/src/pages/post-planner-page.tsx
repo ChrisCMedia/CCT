@@ -270,7 +270,7 @@ export default function PostPlannerPage() {
                       />
                     )}
                     <div className="text-xs text-gray-400 space-y-1">
-                      <div>Geplant für: {format(new Date(post.scheduledDate), "PPP")}</div>
+                      <div>Geplant für: {format(new Date(post.scheduledDate), "PP")}</div>
                       {post.lastEditedAt && post.lastEditedBy && (
                         <div>
                           Zuletzt bearbeitet von {post.lastEditedBy.username} vor{" "}
