@@ -123,17 +123,36 @@ export default function PostPlannerPage() {
   const updatePostMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
       const formData = new FormData();
-      Object.entries(updates).forEach(([key, value]) => {
-        if (value !== undefined) {
-          if (value instanceof Date) {
-            formData.append(key, value.toISOString());
-          } else if (value instanceof File) {
-            formData.append(key, value);
-          } else {
-            formData.append(key, String(value));
-          }
-        }
-      });
+
+      // Ensure content is always sent
+      formData.append("content", updates.content);
+
+      // Convert and append scheduledDate if it exists
+      if (updates.scheduledDate) {
+        formData.append("scheduledDate", updates.scheduledDate.toISOString());
+      }
+
+      // Convert and append accountId if it exists
+      if (updates.accountId) {
+        formData.append("accountId", updates.accountId.toString());
+      }
+
+      // Append other fields if they exist
+      if (updates.image) {
+        formData.append("image", updates.image);
+      }
+
+      if (updates.visibility) {
+        formData.append("visibility", updates.visibility);
+      }
+
+      if (updates.postType) {
+        formData.append("postType", updates.postType);
+      }
+
+      if (updates.articleUrl) {
+        formData.append("articleUrl", updates.articleUrl);
+      }
 
       const res = await fetch(`/api/posts/${id}`, {
         method: "PATCH",
@@ -519,8 +538,8 @@ export default function PostPlannerPage() {
                       id: editingPost.id,
                       updates: {
                         content: editingPost.content,
-                        accountId: editingAccount || editingPost.accountId,
-                        scheduledDate: editingDate || editingPost.scheduledDate,
+                        scheduledDate: editingDate || new Date(editingPost.scheduledDate),
+                        accountId: editingAccount ? Number(editingAccount) : editingPost.accountId,
                         image: editingImage,
                         visibility: editingPost.visibility,
                         postType: editingPost.postType,
