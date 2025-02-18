@@ -107,6 +107,20 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.patch("/api/posts/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const post = await storage.updatePost(Number(req.params.id), {
+        content: req.body.content,
+        userId: req.user.id,
+      });
+      res.json(post);
+    } catch (error) {
+      console.error("Error updating post:", error);
+      res.status(500).json({ message: "Failed to update post" });
+    }
+  });
+
   app.patch("/api/posts/:id/approve", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Post, SocialAccount } from "@shared/schema";
+import { Post, SocialAccount, User } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import Navbar from "@/components/layout/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Image } from "lucide-react";
+import { formatDistance } from "date-fns";
+import { de } from "date-fns/locale";
+import { Badge } from "@/components/ui/badge";
+import { Pencil } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in Bytes
 
@@ -28,9 +38,12 @@ export default function PostPlannerPage() {
   const [selectedAccount, setSelectedAccount] = useState<string>();
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
   const { toast } = useToast();
 
-  const { data: posts } = useQuery<Post[]>({ queryKey: ["/api/posts"] });
+  const { data: posts } = useQuery<(Post & { account: SocialAccount; lastEditedBy?: User })[]>({
+    queryKey: ["/api/posts"],
+  });
   const { data: accounts } = useQuery<SocialAccount[]>({ queryKey: ["/api/social-accounts"] });
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,7 +70,7 @@ export default function PostPlannerPage() {
       const formData = new FormData();
       formData.append("content", data.content);
       formData.append("scheduledDate", data.scheduledDate.toISOString());
-      data.accountIds.forEach(id => formData.append("accountIds[]", id.toString()));
+      data.accountIds.forEach((id) => formData.append("accountIds[]", id.toString()));
       if (data.image) {
         formData.append("image", data.image);
       }
@@ -83,6 +96,21 @@ export default function PostPlannerPage() {
       toast({
         title: "Post erstellt",
         description: "Ihr Post wurde erfolgreich geplant",
+      });
+    },
+  });
+
+  const updatePostMutation = useMutation({
+    mutationFn: async ({ id, content }: { id: number; content: string }) => {
+      const res = await apiRequest("PATCH", `/api/posts/${id}`, { content });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      setEditingPost(null);
+      toast({
+        title: "Post aktualisiert",
+        description: "Der Post wurde erfolgreich aktualisiert",
       });
     },
   });
@@ -130,10 +158,7 @@ export default function PostPlannerPage() {
 
                 <div className="space-y-2">
                   <Label>Account auswählen</Label>
-                  <Select
-                    value={selectedAccount}
-                    onValueChange={setSelectedAccount}
-                  >
+                  <Select value={selectedAccount} onValueChange={setSelectedAccount}>
                     <SelectTrigger>
                       <SelectValue placeholder="Wählen Sie einen Account" />
                     </SelectTrigger>
@@ -213,11 +238,16 @@ export default function PostPlannerPage() {
             <CardContent>
               <div className="space-y-4">
                 {posts?.map((post) => (
-                  <div
-                    key={post.id}
-                    className="p-4 border rounded-lg space-y-2"
-                  >
-                    <p className="text-sm text-gray-600">{post.content}</p>
+                  <div key={post.id} className="p-4 border rounded-lg space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="mb-2">
+                        {post.account?.platform}: {post.account?.accountName}
+                      </Badge>
+                      <Button size="icon" variant="ghost" onClick={() => setEditingPost(post)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{post.content}</p>
                     {post.imageUrl && (
                       <img
                         src={post.imageUrl}
@@ -225,15 +255,21 @@ export default function PostPlannerPage() {
                         className="rounded-lg mt-2 w-full object-cover aspect-video"
                       />
                     )}
-                    <div className="text-xs text-gray-400">
-                      Geplant für: {format(new Date(post.scheduledDate), "PPP")}
+                    <div className="text-xs text-gray-400 space-y-1">
+                      <div>Geplant für: {format(new Date(post.scheduledDate), "PPP")}</div>
+                      {post.lastEditedAt && post.lastEditedBy && (
+                        <div>
+                          Zuletzt bearbeitet von {post.lastEditedBy.username} vor{" "}
+                          {formatDistance(new Date(post.lastEditedAt), new Date(), {
+                            locale: de,
+                            addSuffix: true,
+                          })}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       {!post.approved && (
-                        <Button
-                          size="sm"
-                          onClick={() => approvePostMutation.mutate(post.id)}
-                        >
+                        <Button size="sm" onClick={() => approvePostMutation.mutate(post.id)}>
                           Genehmigen
                         </Button>
                       )}
@@ -252,6 +288,35 @@ export default function PostPlannerPage() {
           </Card>
         </div>
       </main>
+
+      <Dialog open={!!editingPost} onOpenChange={() => setEditingPost(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Post bearbeiten</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              value={editingPost?.content || ""}
+              onChange={(e) =>
+                setEditingPost(editingPost ? { ...editingPost, content: e.target.value } : null)
+              }
+              rows={8}
+            />
+            <Button onClick={() => {
+                if (editingPost) {
+                  updatePostMutation.mutate({
+                    id: editingPost.id,
+                    content: editingPost.content,
+                  });
+                }
+              }}
+              disabled={updatePostMutation.isPending}
+            >
+              Speichern
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

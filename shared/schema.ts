@@ -57,6 +57,8 @@ export const posts = pgTable("posts", {
   approved: boolean("approved").notNull().default(false),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   accountId: integer("account_id").notNull().references(() => socialAccounts.id, { onDelete: "cascade" }),
+  lastEditedAt: timestamp("last_edited_at"),
+  lastEditedByUserId: integer("last_edited_by_user_id").references(() => users.id),
 });
 
 // Verbindungstabelle zwischen Posts und Social Accounts
@@ -74,6 +76,10 @@ export const postsRelations = relations(posts, ({ one }) => ({
   account: one(socialAccounts, {
     fields: [posts.accountId],
     references: [socialAccounts.id],
+  }),
+  lastEditedBy: one(users, {
+    fields: [posts.lastEditedByUserId],
+    references: [users.id],
   }),
 }));
 
@@ -128,7 +134,10 @@ export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Todo = typeof todos.$inferSelect;
-export type Post = typeof posts.$inferSelect;
+export type Post = typeof posts.$inferSelect & {
+  account?: SocialAccount;
+  lastEditedBy?: User;
+};
 export type Newsletter = typeof newsletters.$inferSelect;
 export type SocialAccount = typeof socialAccounts.$inferSelect;
 export type InsertSocialAccount = z.infer<typeof insertSocialAccountSchema>;

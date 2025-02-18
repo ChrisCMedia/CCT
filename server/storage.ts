@@ -1,6 +1,6 @@
 import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, type SocialAccount, type InsertSocialAccount } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -19,8 +19,9 @@ export interface IStorage {
   deleteTodo(id: number): Promise<void>;
 
   // Post operations
-  getPosts(): Promise<Post[]>;
+  getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]>;
   createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post>;
+  updatePost(id: number, data: { content: string; userId: number }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
 
@@ -42,7 +43,7 @@ export class DatabaseStorage implements IStorage {
   constructor() {
     this.sessionStore = new PostgresSessionStore({
       pool,
-      tableName: 'user_sessions',
+      tableName: "user_sessions",
       createTableIfMissing: true,
     });
   }
@@ -84,13 +85,34 @@ export class DatabaseStorage implements IStorage {
     await db.delete(todos).where(eq(todos.id, id));
   }
 
-  async getPosts(): Promise<Post[]> {
-    return db.select().from(posts);
+  async getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]> {
+    return db.select({
+      ...posts,
+      account: socialAccounts,
+      lastEditedBy: users,
+    })
+      .from(posts)
+      .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
+      .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
+      .orderBy(desc(posts.scheduledDate));
   }
 
   async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
     const [newPost] = await db.insert(posts).values(post).returning();
     return newPost;
+  }
+
+  async updatePost(id: number, data: { content: string; userId: number }): Promise<Post> {
+    const [post] = await db
+      .update(posts)
+      .set({
+        content: data.content,
+        lastEditedAt: new Date(),
+        lastEditedByUserId: data.userId,
+      })
+      .where(eq(posts.id, id))
+      .returning();
+    return post;
   }
 
   async approvePost(id: number): Promise<Post> {
