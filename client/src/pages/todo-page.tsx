@@ -223,7 +223,7 @@ export default function TodoPage() {
                         <SelectValue placeholder="Benutzer zuweisen" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Nicht zugewiesen</SelectItem>
+                        <SelectItem value="0">Nicht zugewiesen</SelectItem>
                         {users?.map((user) => (
                           <SelectItem key={user.id} value={user.id.toString()}>
                             {user.username}
