@@ -11,7 +11,7 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/todos", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const todos = await storage.getTodos(req.user.id);
+      const todos = await storage.getTodos();
       res.json(todos);
     } catch (error) {
       console.error("Error fetching todos:", error);
@@ -58,7 +58,7 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/posts", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const posts = await storage.getPosts(req.user.id);
+      const posts = await storage.getPosts();
       res.json(posts);
     } catch (error) {
       console.error("Error fetching posts:", error);
@@ -105,7 +105,7 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/newsletters", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const newsletters = await storage.getNewsletters(req.user.id);
+      const newsletters = await storage.getNewsletters();
       res.json(newsletters);
     } catch (error) {
       console.error("Error fetching newsletters:", error);
@@ -126,11 +126,11 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Neue Social Media Account Routen
+  // Social Media Account Routen
   app.get("/api/social-accounts", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const accounts = await storage.getSocialAccounts(req.user.id);
+      const accounts = await storage.getSocialAccounts();
       res.json(accounts);
     } catch (error) {
       console.error("Error fetching social accounts:", error);

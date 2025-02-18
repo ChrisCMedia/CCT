@@ -13,23 +13,23 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
 
   // Todo operations
-  getTodos(userId: number): Promise<Todo[]>;
+  getTodos(): Promise<Todo[]>;
   createTodo(todo: { title: string; userId: number }): Promise<Todo>;
   updateTodo(id: number, completed: boolean): Promise<Todo>;
   deleteTodo(id: number): Promise<void>;
 
   // Post operations
-  getPosts(userId: number): Promise<Post[]>;
+  getPosts(): Promise<Post[]>;
   createPost(post: { content: string; scheduledDate: Date; userId: number; accountIds: number[] }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
 
   // Newsletter operations
-  getNewsletters(userId: number): Promise<Newsletter[]>;
+  getNewsletters(): Promise<Newsletter[]>;
   createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter>;
 
   // Neue Social Media Account Operationen
-  getSocialAccounts(userId: number): Promise<SocialAccount[]>;
+  getSocialAccounts(): Promise<SocialAccount[]>;
   createSocialAccount(account: InsertSocialAccount & { userId: number }): Promise<SocialAccount>;
   deleteSocialAccount(id: number): Promise<void>;
 
@@ -62,8 +62,8 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getTodos(userId: number): Promise<Todo[]> {
-    return db.select().from(todos).where(eq(todos.userId, userId));
+  async getTodos(): Promise<Todo[]> {
+    return db.select().from(todos);
   }
 
   async createTodo(todo: { title: string; userId: number }): Promise<Todo> {
@@ -84,8 +84,8 @@ export class DatabaseStorage implements IStorage {
     await db.delete(todos).where(eq(todos.id, id));
   }
 
-  async getPosts(userId: number): Promise<Post[]> {
-    return db.select().from(posts).where(eq(posts.userId, userId));
+  async getPosts(): Promise<Post[]> {
+    return db.select().from(posts);
   }
 
   async createPost(post: { content: string; scheduledDate: Date; userId: number; accountIds: number[] }): Promise<Post> {
@@ -118,8 +118,8 @@ export class DatabaseStorage implements IStorage {
     await db.delete(posts).where(eq(posts.id, id));
   }
 
-  async getNewsletters(userId: number): Promise<Newsletter[]> {
-    return db.select().from(newsletters).where(eq(newsletters.userId, userId));
+  async getNewsletters(): Promise<Newsletter[]> {
+    return db.select().from(newsletters);
   }
 
   async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
@@ -127,8 +127,8 @@ export class DatabaseStorage implements IStorage {
     return newNewsletter;
   }
 
-  async getSocialAccounts(userId: number): Promise<SocialAccount[]> {
-    return db.select().from(socialAccounts).where(eq(socialAccounts.userId, userId));
+  async getSocialAccounts(): Promise<SocialAccount[]> {
+    return db.select().from(socialAccounts);
   }
 
   async createSocialAccount(account: InsertSocialAccount & { userId: number }): Promise<SocialAccount> {
