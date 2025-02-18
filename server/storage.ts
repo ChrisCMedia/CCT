@@ -1,4 +1,4 @@
-import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters } from "@shared/schema";
+import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, type SocialAccount, type InsertSocialAccount } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import session from "express-session";
@@ -20,13 +20,18 @@ export interface IStorage {
 
   // Post operations
   getPosts(userId: number): Promise<Post[]>;
-  createPost(post: { content: string; scheduledDate: Date; userId: number }): Promise<Post>;
+  createPost(post: { content: string; scheduledDate: Date; userId: number; accountIds: number[] }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
 
   // Newsletter operations
   getNewsletters(userId: number): Promise<Newsletter[]>;
   createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter>;
+
+  // Neue Social Media Account Operationen
+  getSocialAccounts(userId: number): Promise<SocialAccount[]>;
+  createSocialAccount(account: InsertSocialAccount & { userId: number }): Promise<SocialAccount>;
+  deleteSocialAccount(id: number): Promise<void>;
 
   sessionStore: session.Store;
 }
@@ -37,7 +42,7 @@ export class DatabaseStorage implements IStorage {
   constructor() {
     this.sessionStore = new PostgresSessionStore({
       pool,
-      tableName: 'user_sessions', // Geänderter Tabellenname
+      tableName: 'user_sessions',
       createTableIfMissing: true,
     });
   }
@@ -83,8 +88,20 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(posts).where(eq(posts.userId, userId));
   }
 
-  async createPost(post: { content: string; scheduledDate: Date; userId: number }): Promise<Post> {
-    const [newPost] = await db.insert(posts).values(post).returning();
+  async createPost(post: { content: string; scheduledDate: Date; userId: number; accountIds: number[] }): Promise<Post> {
+    const { accountIds, ...postData } = post;
+
+    const [newPost] = await db.insert(posts).values(postData).returning();
+
+    await Promise.all(
+      accountIds.map((accountId) =>
+        db.insert(postAccounts).values({
+          postId: newPost.id,
+          accountId,
+        })
+      )
+    );
+
     return newPost;
   }
 
@@ -108,6 +125,19 @@ export class DatabaseStorage implements IStorage {
   async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
     const [newNewsletter] = await db.insert(newsletters).values(newsletter).returning();
     return newNewsletter;
+  }
+
+  async getSocialAccounts(userId: number): Promise<SocialAccount[]> {
+    return db.select().from(socialAccounts).where(eq(socialAccounts.userId, userId));
+  }
+
+  async createSocialAccount(account: InsertSocialAccount & { userId: number }): Promise<SocialAccount> {
+    const [newAccount] = await db.insert(socialAccounts).values(account).returning();
+    return newAccount;
+  }
+
+  async deleteSocialAccount(id: number): Promise<void> {
+    await db.delete(socialAccounts).where(eq(socialAccounts.id, id));
   }
 }
 

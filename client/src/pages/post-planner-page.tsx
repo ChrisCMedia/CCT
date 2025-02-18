@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Post } from "@shared/schema";
+import { Post, SocialAccount } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import Navbar from "@/components/layout/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,15 +9,20 @@ import { Calendar } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 export default function PostPlannerPage() {
   const [content, setContent] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date>();
+  const [selectedAccounts, setSelectedAccounts] = useState<number[]>([]);
   const { toast } = useToast();
+
   const { data: posts } = useQuery<Post[]>({ queryKey: ["/api/posts"] });
+  const { data: accounts } = useQuery<SocialAccount[]>({ queryKey: ["/api/social-accounts"] });
 
   const createPostMutation = useMutation({
-    mutationFn: async (data: { content: string; scheduledDate: Date }) => {
+    mutationFn: async (data: { content: string; scheduledDate: Date; accountIds: number[] }) => {
       const res = await apiRequest("POST", "/api/posts", data);
       return res.json();
     },
@@ -25,9 +30,10 @@ export default function PostPlannerPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
       setContent("");
       setSelectedDate(undefined);
+      setSelectedAccounts([]);
       toast({
-        title: "Post created",
-        description: "Your post has been scheduled",
+        title: "Post erstellt",
+        description: "Ihr Post wurde erfolgreich geplant",
       });
     },
   });
@@ -40,8 +46,8 @@ export default function PostPlannerPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
       toast({
-        title: "Post approved",
-        description: "The post has been approved for publishing",
+        title: "Post genehmigt",
+        description: "Der Post wurde zur Veröffentlichung freigegeben",
       });
     },
   });
@@ -62,16 +68,41 @@ export default function PostPlannerPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Create New Post</CardTitle>
+              <CardTitle>Neuen Post erstellen</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <Textarea
-                  placeholder="Write your post content..."
+                  placeholder="Schreiben Sie Ihren Post-Inhalt..."
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   rows={4}
                 />
+
+                <div className="space-y-2">
+                  <Label>Social Media Accounts auswählen</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {accounts?.map((account) => (
+                      <div key={account.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`account-${account.id}`}
+                          checked={selectedAccounts.includes(account.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedAccounts([...selectedAccounts, account.id]);
+                            } else {
+                              setSelectedAccounts(selectedAccounts.filter(id => id !== account.id));
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`account-${account.id}`}>
+                          {account.platform} - {account.accountName}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex justify-between items-center">
                   <Calendar
                     mode="single"
@@ -80,19 +111,21 @@ export default function PostPlannerPage() {
                     className="rounded-md border"
                   />
                 </div>
+
                 <Button
                   className="w-full"
                   onClick={() => {
-                    if (content && selectedDate) {
+                    if (content && selectedDate && selectedAccounts.length > 0) {
                       createPostMutation.mutate({
                         content,
                         scheduledDate: selectedDate,
+                        accountIds: selectedAccounts,
                       });
                     }
                   }}
-                  disabled={!content || !selectedDate || createPostMutation.isPending}
+                  disabled={!content || !selectedDate || selectedAccounts.length === 0 || createPostMutation.isPending}
                 >
-                  Schedule Post
+                  Post planen
                 </Button>
               </div>
             </CardContent>
@@ -100,7 +133,7 @@ export default function PostPlannerPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Scheduled Posts</CardTitle>
+              <CardTitle>Geplante Posts</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -111,7 +144,7 @@ export default function PostPlannerPage() {
                   >
                     <p className="text-sm text-gray-600">{post.content}</p>
                     <div className="text-xs text-gray-400">
-                      Scheduled for: {format(new Date(post.scheduledDate), "PPP")}
+                      Geplant für: {format(new Date(post.scheduledDate), "PPP")}
                     </div>
                     <div className="flex gap-2">
                       {!post.approved && (
@@ -119,7 +152,7 @@ export default function PostPlannerPage() {
                           size="sm"
                           onClick={() => approvePostMutation.mutate(post.id)}
                         >
-                          Approve
+                          Genehmigen
                         </Button>
                       )}
                       <Button
@@ -127,7 +160,7 @@ export default function PostPlannerPage() {
                         variant="destructive"
                         onClick={() => deletePostMutation.mutate(post.id)}
                       >
-                        Delete
+                        Löschen
                       </Button>
                     </div>
                   </div>

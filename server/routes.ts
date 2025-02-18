@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertTodoSchema, insertPostSchema, insertNewsletterSchema } from "@shared/schema";
+import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema } from "@shared/schema";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
@@ -123,6 +123,42 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error creating newsletter:", error);
       res.status(500).json({ message: "Failed to create newsletter" });
+    }
+  });
+
+  // Neue Social Media Account Routen
+  app.get("/api/social-accounts", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const accounts = await storage.getSocialAccounts(req.user.id);
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching social accounts:", error);
+      res.status(500).json({ message: "Failed to fetch social accounts" });
+    }
+  });
+
+  app.post("/api/social-accounts", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const parsed = insertSocialAccountSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json(parsed.error);
+      const account = await storage.createSocialAccount({ ...parsed.data, userId: req.user.id });
+      res.json(account);
+    } catch (error) {
+      console.error("Error creating social account:", error);
+      res.status(500).json({ message: "Failed to create social account" });
+    }
+  });
+
+  app.delete("/api/social-accounts/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      await storage.deleteSocialAccount(Number(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting social account:", error);
+      res.status(500).json({ message: "Failed to delete social account" });
     }
   });
 
