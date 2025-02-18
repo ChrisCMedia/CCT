@@ -9,13 +9,19 @@ import { Calendar } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
 export default function PostPlannerPage() {
   const [content, setContent] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date>();
-  const [selectedAccounts, setSelectedAccounts] = useState<number[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<string>();
   const { toast } = useToast();
 
   const { data: posts } = useQuery<Post[]>({ queryKey: ["/api/posts"] });
@@ -30,7 +36,7 @@ export default function PostPlannerPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
       setContent("");
       setSelectedDate(undefined);
-      setSelectedAccounts([]);
+      setSelectedAccount(undefined);
       toast({
         title: "Post erstellt",
         description: "Ihr Post wurde erfolgreich geplant",
@@ -80,27 +86,22 @@ export default function PostPlannerPage() {
                 />
 
                 <div className="space-y-2">
-                  <Label>Social Media Accounts auswählen</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {accounts?.map((account) => (
-                      <div key={account.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`account-${account.id}`}
-                          checked={selectedAccounts.includes(account.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedAccounts([...selectedAccounts, account.id]);
-                            } else {
-                              setSelectedAccounts(selectedAccounts.filter(id => id !== account.id));
-                            }
-                          }}
-                        />
-                        <Label htmlFor={`account-${account.id}`}>
-                          {account.platform} - {account.accountName}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
+                  <Label>Account auswählen</Label>
+                  <Select
+                    value={selectedAccount}
+                    onValueChange={setSelectedAccount}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Wählen Sie einen Account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts?.map((account) => (
+                        <SelectItem key={account.id} value={account.id.toString()}>
+                          {account.accountName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="flex justify-between items-center">
@@ -115,15 +116,15 @@ export default function PostPlannerPage() {
                 <Button
                   className="w-full"
                   onClick={() => {
-                    if (content && selectedDate && selectedAccounts.length > 0) {
+                    if (content && selectedDate && selectedAccount) {
                       createPostMutation.mutate({
                         content,
                         scheduledDate: selectedDate,
-                        accountIds: selectedAccounts,
+                        accountIds: [parseInt(selectedAccount)],
                       });
                     }
                   }}
-                  disabled={!content || !selectedDate || selectedAccounts.length === 0 || createPostMutation.isPending}
+                  disabled={!content || !selectedDate || !selectedAccount || createPostMutation.isPending}
                 >
                   Post planen
                 </Button>
