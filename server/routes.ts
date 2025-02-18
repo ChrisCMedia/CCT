@@ -179,6 +179,31 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.patch("/api/newsletters/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const newsletter = await storage.updateNewsletter(Number(req.params.id), {
+        title: req.body.title,
+        content: req.body.content,
+      });
+      res.json(newsletter);
+    } catch (error) {
+      console.error("Error updating newsletter:", error);
+      res.status(500).json({ message: "Failed to update newsletter" });
+    }
+  });
+
+  app.delete("/api/newsletters/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      await storage.deleteNewsletter(Number(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting newsletter:", error);
+      res.status(500).json({ message: "Failed to delete newsletter" });
+    }
+  });
+
   // Social Media Account Routen
   app.get("/api/social-accounts", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

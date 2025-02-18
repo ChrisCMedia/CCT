@@ -29,6 +29,8 @@ export interface IStorage {
   // Newsletter operations
   getNewsletters(): Promise<Newsletter[]>;
   createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter>;
+  updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter>;
+  deleteNewsletter(id: number): Promise<void>;
 
   // Neue Social Media Account Operationen
   getSocialAccounts(): Promise<SocialAccount[]>;
@@ -145,6 +147,19 @@ export class DatabaseStorage implements IStorage {
   async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
     const [newNewsletter] = await db.insert(newsletters).values(newsletter).returning();
     return newNewsletter;
+  }
+
+  async updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter> {
+    const [newsletter] = await db
+      .update(newsletters)
+      .set(data)
+      .where(eq(newsletters.id, id))
+      .returning();
+    return newsletter;
+  }
+
+  async deleteNewsletter(id: number): Promise<void> {
+    await db.delete(newsletters).where(eq(newsletters.id, id));
   }
 
   async getSocialAccounts(): Promise<SocialAccount[]> {
