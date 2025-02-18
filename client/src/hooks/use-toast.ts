@@ -1,5 +1,4 @@
 import * as React from "react"
-
 import type {
   ToastActionElement,
   ToastProps,
@@ -53,6 +52,10 @@ interface State {
   toasts: ToasterToast[]
 }
 
+const initialState: State = {
+  toasts: [],
+}
+
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
 const addToRemoveQueue = (toastId: string) => {
@@ -90,8 +93,6 @@ export const reducer = (state: State, action: Action): State => {
     case "DISMISS_TOAST": {
       const { toastId } = action
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
       if (toastId) {
         addToRemoveQueue(toastId)
       } else {
@@ -128,7 +129,7 @@ export const reducer = (state: State, action: Action): State => {
 
 const listeners: Array<(state: State) => void> = []
 
-let memoryState: State = { toasts: [] }
+let memoryState: State = initialState
 
 function dispatch(action: Action) {
   memoryState = reducer(memoryState, action)
@@ -179,7 +180,7 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+  }, [])
 
   return {
     ...state,
