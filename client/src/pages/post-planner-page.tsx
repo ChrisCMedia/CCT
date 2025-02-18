@@ -269,17 +269,22 @@ export default function PostPlannerPage() {
                         className="rounded-lg mt-2 w-full object-cover aspect-video"
                       />
                     )}
-                    <div className="text-xs text-gray-400 space-y-1">
-                      <div>Geplant für: {format(new Date(post.scheduledDate), "PP")}</div>
-                      {post.lastEditedAt && post.lastEditedBy && (
-                        <div>
-                          Zuletzt bearbeitet von <span className="font-medium">{post.lastEditedBy.username}</span>{" "}
-                          {formatDistance(new Date(post.lastEditedAt), new Date(), {
-                            locale: de,
-                            addSuffix: true,
-                          })}
-                        </div>
-                      )}
+                    <div className="text-xs space-y-1">
+                      <div className="text-gray-400 flex items-center gap-2">
+                        Geplant für: {format(new Date(post.scheduledDate), "PP")}
+                        {post.lastEditedAt && post.lastEditedBy && (
+                          <>
+                            <span>•</span>
+                            <span>
+                              Bearbeitet von <span className="font-semibold text-primary">{post.lastEditedBy.username}</span>{" "}
+                              {formatDistance(new Date(post.lastEditedAt), new Date(), {
+                                locale: de,
+                                addSuffix: true,
+                              })}
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       {post.approved ? (
