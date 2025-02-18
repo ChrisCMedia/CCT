@@ -176,11 +176,22 @@ export function registerRoutes(app: Express): Server {
   app.patch("/api/posts/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
+      // Parse and validate the scheduled date
+      let scheduledDate: Date | undefined;
+      try {
+        scheduledDate = req.body.scheduledDate ? new Date(req.body.scheduledDate) : undefined;
+        if (scheduledDate && scheduledDate.toString() === "Invalid Date") {
+          throw new Error("Invalid date format");
+        }
+      } catch (error) {
+        return res.status(400).json({ message: "Invalid date format for scheduledDate" });
+      }
+
       const post = await storage.updatePost(Number(req.params.id), {
         content: req.body.content,
         userId: req.user.id,
-        scheduledDate: new Date(req.body.scheduledDate),
-        accountId: Number(req.body.accountId),
+        scheduledDate,
+        accountId: req.body.accountId ? Number(req.body.accountId) : undefined,
         imageUrl: req.body.imageUrl,
         visibility: req.body.visibility,
         postType: req.body.postType,

@@ -235,14 +235,14 @@ export class DatabaseStorage implements IStorage {
         content: data.content,
         lastEditedAt: new Date(),
         lastEditedByUserId: data.userId,
-        ...(data.scheduledDate && { scheduledDate: data.scheduledDate }),
-        ...(data.accountId && { accountId: data.accountId }),
-        ...(data.imageUrl && { imageUrl: data.imageUrl }),
-        ...(data.platformPostId && { platformPostId: data.platformPostId }),
-        ...(data.publishStatus && { publishStatus: data.publishStatus }),
-        ...(data.visibility && { visibility: data.visibility }),
-        ...(data.postType && { postType: data.postType }),
-        ...(data.articleUrl && { articleUrl: data.articleUrl }),
+        scheduledDate: data.scheduledDate || undefined,
+        accountId: data.accountId || undefined,
+        imageUrl: data.imageUrl || undefined,
+        platformPostId: data.platformPostId || undefined,
+        publishStatus: data.publishStatus || undefined,
+        visibility: data.visibility || undefined,
+        postType: data.postType || undefined,
+        articleUrl: data.articleUrl || undefined,
       })
       .where(eq(posts.id, id))
       .returning();
