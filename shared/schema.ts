@@ -48,9 +48,11 @@ export const todosRelations = relations(todos, ({ one }) => ({
   }),
 }));
 
+// Im posts-Table das imageUrl Feld hinzufügen
 export const posts = pgTable("posts", {
   id: serial("id").primaryKey(),
   content: text("content").notNull(),
+  imageUrl: text("image_url"),
   scheduledDate: timestamp("scheduled_date").notNull(),
   approved: boolean("approved").notNull().default(false),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -106,10 +108,12 @@ export const insertPostSchema = createInsertSchema(posts)
   .pick({
     content: true,
     scheduledDate: true,
+    imageUrl: true,
   })
   .extend({
     scheduledDate: z.coerce.date(),
     accountIds: z.array(z.number()).min(1, "Mindestens ein Account muss ausgewählt werden"),
+    image: z.instanceof(File).optional(),
   });
 
 export const insertNewsletterSchema = createInsertSchema(newsletters).pick({

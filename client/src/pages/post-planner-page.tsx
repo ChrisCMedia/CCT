@@ -17,19 +17,60 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Image } from "lucide-react";
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in Bytes
 
 export default function PostPlannerPage() {
   const [content, setContent] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedAccount, setSelectedAccount] = useState<string>();
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: posts } = useQuery<Post[]>({ queryKey: ["/api/posts"] });
   const { data: accounts } = useQuery<SocialAccount[]>({ queryKey: ["/api/social-accounts"] });
 
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: "Fehler",
+        description: "Die Datei ist zu groß. Maximum ist 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSelectedImage(file);
+    // Erstelle eine URL für die Vorschau
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  };
+
   const createPostMutation = useMutation({
-    mutationFn: async (data: { content: string; scheduledDate: Date; accountIds: number[] }) => {
-      const res = await apiRequest("POST", "/api/posts", data);
+    mutationFn: async (data: { content: string; scheduledDate: Date; accountIds: number[]; image?: File }) => {
+      const formData = new FormData();
+      formData.append("content", data.content);
+      formData.append("scheduledDate", data.scheduledDate.toISOString());
+      data.accountIds.forEach(id => formData.append("accountIds[]", id.toString()));
+      if (data.image) {
+        formData.append("image", data.image);
+      }
+
+      const res = await fetch("/api/posts", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Fehler beim Erstellen des Posts");
+      }
+
       return res.json();
     },
     onSuccess: () => {
@@ -37,6 +78,8 @@ export default function PostPlannerPage() {
       setContent("");
       setSelectedDate(undefined);
       setSelectedAccount(undefined);
+      setSelectedImage(null);
+      setPreviewUrl(null);
       toast({
         title: "Post erstellt",
         description: "Ihr Post wurde erfolgreich geplant",
@@ -104,6 +147,36 @@ export default function PostPlannerPage() {
                   </Select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label>Bild hinzufügen (max. 5MB)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="cursor-pointer"
+                  />
+                  {previewUrl && (
+                    <div className="mt-2 relative w-full aspect-video">
+                      <img
+                        src={previewUrl}
+                        alt="Vorschau"
+                        className="rounded-lg object-cover w-full h-full"
+                      />
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          setSelectedImage(null);
+                          setPreviewUrl(null);
+                        }}
+                      >
+                        Entfernen
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex justify-between items-center">
                   <Calendar
                     mode="single"
@@ -121,6 +194,7 @@ export default function PostPlannerPage() {
                         content,
                         scheduledDate: selectedDate,
                         accountIds: [parseInt(selectedAccount)],
+                        image: selectedImage || undefined,
                       });
                     }
                   }}
@@ -144,6 +218,13 @@ export default function PostPlannerPage() {
                     className="p-4 border rounded-lg space-y-2"
                   >
                     <p className="text-sm text-gray-600">{post.content}</p>
+                    {post.imageUrl && (
+                      <img
+                        src={post.imageUrl}
+                        alt="Post Bild"
+                        className="rounded-lg mt-2 w-full object-cover aspect-video"
+                      />
+                    )}
                     <div className="text-xs text-gray-400">
                       Geplant für: {format(new Date(post.scheduledDate), "PPP")}
                     </div>

@@ -2,10 +2,31 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
+import multer from "multer";
+import path from "path";
+import express from "express";
 import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema } from "@shared/schema";
+
+const upload = multer({
+  dest: "uploads/",
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      cb(new Error("Nur Bilder sind erlaubt"));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
+
+  // Serve uploaded files
+  app.use("/uploads", express.static("uploads"));
 
   // Todo routes
   app.get("/api/todos", async (req, res) => {
@@ -66,12 +87,19 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/posts", async (req, res) => {
+  app.post("/api/posts", upload.single("image"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const parsed = insertPostSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json(parsed.error);
-      const post = await storage.createPost({ ...parsed.data, userId: req.user.id });
+      const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+      const postData = {
+        content: req.body.content,
+        scheduledDate: new Date(req.body.scheduledDate),
+        accountIds: req.body.accountIds.map(Number),
+        imageUrl,
+        userId: req.user.id,
+      };
+
+      const post = await storage.createPost(postData);
       res.json(post);
     } catch (error) {
       console.error("Error creating post:", error);
