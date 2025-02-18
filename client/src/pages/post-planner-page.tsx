@@ -138,6 +138,20 @@ export default function PostPlannerPage() {
     },
   });
 
+  const unapprovePostMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("PATCH", `/api/posts/${id}/unapprove`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({
+        title: "Genehmigung zurückgezogen",
+        description: "Die Genehmigung des Posts wurde zurückgezogen",
+      });
+    },
+  });
+
   return (
     <div>
       <Navbar />
@@ -268,7 +282,15 @@ export default function PostPlannerPage() {
                       )}
                     </div>
                     <div className="flex gap-2">
-                      {!post.approved && (
+                      {post.approved ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => unapprovePostMutation.mutate(post.id)}
+                        >
+                          Genehmigung zurückziehen
+                        </Button>
+                      ) : (
                         <Button size="sm" onClick={() => approvePostMutation.mutate(post.id)}>
                           Genehmigen
                         </Button>

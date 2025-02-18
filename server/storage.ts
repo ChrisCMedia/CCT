@@ -23,6 +23,7 @@ export interface IStorage {
   createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post>;
   updatePost(id: number, data: { content: string; userId: number }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
+  unapprovePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
 
   // Newsletter operations
@@ -119,6 +120,15 @@ export class DatabaseStorage implements IStorage {
     const [post] = await db
       .update(posts)
       .set({ approved: true })
+      .where(eq(posts.id, id))
+      .returning();
+    return post;
+  }
+
+  async unapprovePost(id: number): Promise<Post> {
+    const [post] = await db
+      .update(posts)
+      .set({ approved: false })
       .where(eq(posts.id, id))
       .returning();
     return post;

@@ -132,6 +132,17 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.patch("/api/posts/:id/unapprove", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const post = await storage.unapprovePost(Number(req.params.id));
+      res.json(post);
+    } catch (error) {
+      console.error("Error unapproving post:", error);
+      res.status(500).json({ message: "Failed to unapprove post" });
+    }
+  });
+
   app.delete("/api/posts/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
