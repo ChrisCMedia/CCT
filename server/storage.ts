@@ -1,6 +1,6 @@
 import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc, isNotNull } from "drizzle-orm";
+import { eq, asc, isNotNull, isNull } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -205,7 +205,7 @@ export class DatabaseStorage implements IStorage {
       .from(posts)
       .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
       .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
-      .where(eq(posts.deletedAt, null))
+      .where(isNull(posts.deletedAt))
       .orderBy(asc(posts.scheduledDate));
 
     return result.map(({ post, account, lastEditedBy }) => ({
