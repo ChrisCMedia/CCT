@@ -525,7 +525,7 @@ export default function PostPlannerPage() {
                 <div className="space-y-2">
                   <Label>Sichtbarkeit</Label>
                   <Select
-                    value={editingPost.visibility}
+                    value={editingPost.visibility || "public"}
                     onValueChange={(value) =>
                       setEditingPost(editingPost ? { ...editingPost, visibility: value } : null)
                     }
@@ -546,7 +546,7 @@ export default function PostPlannerPage() {
                 <div className="space-y-2">
                   <Label>Post-Typ</Label>
                   <Select
-                    value={editingPost.postType}
+                    value={editingPost.postType || "post"}
                     onValueChange={(value) =>
                       setEditingPost(editingPost ? { ...editingPost, postType: value } : null)
                     }
