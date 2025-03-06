@@ -2,11 +2,20 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupLinkedInAuth } from "./linkedin";
+import cron from "node-cron";
+import { storage } from "./storage";
+import { exec } from "child_process";
+import { promisify } from "util";
+import path from "path";
+import fs from "fs";
+
+const execAsync = promisify(exec);
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Logging-Middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -37,12 +46,57 @@ app.use((req, res, next) => {
   next();
 });
 
+// Automatisches wöchentliches Backup
+async function createBackup() {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `backup-${timestamp}.sql`;
+    const filePath = path.join("backups", fileName);
+
+    // Stelle sicher, dass das Backup-Verzeichnis existiert
+    if (!fs.existsSync("backups")) {
+      fs.mkdirSync("backups", { recursive: true });
+    }
+
+    // Erstelle einen neuen Backup-Eintrag
+    const backup = await storage.createBackup({
+      fileName,
+      fileSize: 0,
+    });
+
+    try {
+      // Führe pg_dump aus
+      const databaseUrl = process.env.DATABASE_URL;
+      if (!databaseUrl) {
+        throw new Error("DATABASE_URL ist nicht gesetzt");
+      }
+
+      await execAsync(`pg_dump "${databaseUrl}" > "${filePath}"`);
+
+      // Aktualisiere den Backup-Status
+      await storage.updateBackupStatus(backup.id, "completed");
+      log(`Automatisches Backup erfolgreich erstellt: ${fileName}`);
+    } catch (error: any) {
+      log(`Fehler beim automatischen Backup: ${error.message}`);
+      await storage.updateBackupStatus(backup.id, "failed", error.message);
+    }
+  } catch (error: any) {
+    log(`Fehler beim Erstellen des Backup-Eintrags: ${error.message}`);
+  }
+}
+
+// Plane wöchentliches Backup (jeden Sonntag um 3 Uhr morgens)
+cron.schedule('0 3 * * 0', () => {
+  log('Starte automatisches wöchentliches Backup...');
+  createBackup();
+});
+
 (async () => {
   log("Starting server initialization...");
 
   try {
     const server = registerRoutes(app);
-    setupLinkedInAuth(app); // LinkedIn Auth Setup hinzufügen
+    setupLinkedInAuth(app);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
@@ -64,6 +118,10 @@ app.use((req, res, next) => {
     server.listen(PORT, "0.0.0.0", () => {
       log(`Server successfully started and listening on port ${PORT}`);
     });
+
+    // Erstelle ein initiales Backup beim Serverstart
+    log("Erstelle initiales Backup...");
+    await createBackup();
   } catch (error) {
     log(`Failed to start server: ${error}`);
     process.exit(1);
