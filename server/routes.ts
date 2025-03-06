@@ -6,6 +6,11 @@ import multer from "multer";
 import path from "path";
 import express from "express";
 import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema } from "@shared/schema";
+import { exec } from "child_process";
+import { promisify } from "util";
+import fs from "fs";
+
+const execAsync = promisify(exec);
 
 const upload = multer({
   dest: "uploads/",
@@ -330,6 +335,62 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error deleting social account:", error);
       res.status(500).json({ message: "Failed to delete social account" });
+    }
+  });
+
+  // Backup routes
+  app.post("/api/backups", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      // Erstelle einen Backup-Eintrag in der Datenbank
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileName = `backup-${timestamp}.sql`;
+      const filePath = path.join("backups", fileName);
+
+      // Stelle sicher, dass das Backup-Verzeichnis existiert
+      if (!fs.existsSync("backups")) {
+        fs.mkdirSync("backups", { recursive: true });
+      }
+
+      // Erstelle einen neuen Backup-Eintrag
+      const backup = await storage.createBackup({
+        fileName,
+        fileSize: 0, // wird später aktualisiert
+      });
+
+      try {
+        // Führe pg_dump aus
+        const databaseUrl = process.env.DATABASE_URL;
+        if (!databaseUrl) {
+          throw new Error("DATABASE_URL ist nicht gesetzt");
+        }
+
+        await execAsync(`pg_dump "${databaseUrl}" > "${filePath}"`);
+
+        // Aktualisiere die Dateigröße
+        const stats = fs.statSync(filePath);
+        await storage.updateBackupStatus(backup.id, "completed");
+
+        res.json(backup);
+      } catch (error) {
+        console.error("Backup-Fehler:", error);
+        await storage.updateBackupStatus(backup.id, "failed", error.message);
+        res.status(500).json({ message: "Backup fehlgeschlagen", error: error.message });
+      }
+    } catch (error) {
+      console.error("Error creating backup:", error);
+      res.status(500).json({ message: "Failed to create backup" });
+    }
+  });
+
+  app.get("/api/backups", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const backups = await storage.getBackups();
+      res.json(backups);
+    } catch (error) {
+      console.error("Error fetching backups:", error);
+      res.status(500).json({ message: "Failed to fetch backups" });
     }
   });
 

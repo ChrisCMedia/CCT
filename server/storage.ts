@@ -1,6 +1,6 @@
-import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask } from "@shared/schema";
+import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc, isNotNull, isNull } from "drizzle-orm";
+import { eq, asc, isNotNull, isNull, desc } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -94,6 +94,12 @@ export interface IStorage {
   createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask>;
   updateSubtask(id: number, completed: boolean): Promise<SubTask>;
   deleteSubtask(id: number): Promise<void>;
+
+  // Neue Backup-Funktionen
+  createBackup(backup: InsertBackup): Promise<Backup>;
+  updateBackupStatus(id: number, status: string, error?: string): Promise<Backup>;
+  getBackups(): Promise<Backup[]>;
+  getLatestBackup(): Promise<Backup | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -428,6 +434,41 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSubtask(id: number): Promise<void> {
     await db.delete(subtasks).where(eq(subtasks.id, id));
+  }
+
+  async createBackup(backup: InsertBackup): Promise<Backup> {
+    const [newBackup] = await db.insert(backups).values(backup).returning();
+    return newBackup;
+  }
+
+  async updateBackupStatus(id: number, status: string, error?: string): Promise<Backup> {
+    const [backup] = await db
+      .update(backups)
+      .set({
+        status,
+        completedAt: status === 'completed' ? new Date() : undefined,
+        error,
+      })
+      .where(eq(backups.id, id))
+      .returning();
+    return backup;
+  }
+
+  async getBackups(): Promise<Backup[]> {
+    return db
+      .select()
+      .from(backups)
+      .orderBy(desc(backups.createdAt));
+  }
+
+  async getLatestBackup(): Promise<Backup | undefined> {
+    const [backup] = await db
+      .select()
+      .from(backups)
+      .where(eq(backups.status, 'completed'))
+      .orderBy(desc(backups.createdAt))
+      .limit(1);
+    return backup;
   }
 }
 

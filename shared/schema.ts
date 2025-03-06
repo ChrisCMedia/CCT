@@ -204,6 +204,21 @@ export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
   content: true,
 });
 
+export const backups = pgTable("backups", {
+  id: serial("id").primaryKey(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull(),
+  status: text("status").notNull().default("pending"),
+  completedAt: timestamp("completed_at"),
+  error: text("error"),
+});
+
+export const insertBackupSchema = createInsertSchema(backups).pick({
+  fileName: true,
+  fileSize: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Todo = typeof todos.$inferSelect & {
@@ -221,3 +236,5 @@ export type InsertSocialAccount = z.infer<typeof insertSocialAccountSchema>;
 export type InsertPost = z.infer<typeof insertPostSchema>;
 export type PostAnalytics = typeof postAnalytics.$inferSelect;
 export type SubTask = typeof subtasks.$inferSelect;
+export type Backup = typeof backups.$inferSelect;
+export type InsertBackup = z.infer<typeof insertBackupSchema>;
