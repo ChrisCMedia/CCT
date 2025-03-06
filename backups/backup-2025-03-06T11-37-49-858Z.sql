@@ -452,7 +452,8 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 --
 
 COPY public.backups (id, created_at, file_name, file_size, status, completed_at, error) FROM stdin;
-1	2025-03-06 11:35:04.787304	backup-2025-03-06T11-35-01-730Z.sql	0	pending	\N	\N
+1	2025-03-06 11:35:04.787304	backup-2025-03-06T11-35-01-730Z.sql	0	completed	2025-03-06 11:35:10.649	\N
+2	2025-03-06 11:37:50.332621	backup-2025-03-06T11-37-49-858Z.sql	0	pending	\N	\N
 \.
 
 
@@ -542,10 +543,10 @@ COPY public.todos (id, title, completed, user_id, description, assigned_to_user_
 --
 
 COPY public.user_sessions (sid, sess, expire) FROM stdin;
+uSfHx_ybPv2-eWw6g-1omAubKuJg_04r	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-07T11:32:50.132Z","secure":false,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-07 11:36:59
 aYrWf9mZYC6cnoCH1RljoYbHpgLK6yiQ	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-06T11:09:01.588Z","secure":true,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-06 11:09:43
 rOqUYmDyTWUCJBschikz6L_jqltRmC5J	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-05T11:06:30.559Z","secure":true,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-06 11:05:32
 KfXnnbSUob8JgAdna0MCv6eWlECkeYJT	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-06T07:46:11.976Z","secure":true,"httpOnly":true,"path":"/"},"passport":{"user":7}}	2025-03-06 07:46:13
-uSfHx_ybPv2-eWw6g-1omAubKuJg_04r	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-07T11:32:50.132Z","secure":false,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-07 11:35:08
 \.
 
 
@@ -563,7 +564,7 @@ COPY public.users (id, username, password) FROM stdin;
 -- Name: backups_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
 --
 
-SELECT pg_catalog.setval('public.backups_id_seq', 1, true);
+SELECT pg_catalog.setval('public.backups_id_seq', 2, true);
 
 
 --
