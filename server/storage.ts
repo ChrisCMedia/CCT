@@ -1,6 +1,6 @@
 import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc, isNotNull, isNull, desc } from "drizzle-orm";
+import { eq, asc, isNotNull, isNull, desc, and } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -327,8 +327,12 @@ export class DatabaseStorage implements IStorage {
     const [account] = await db
       .select()
       .from(socialAccounts)
-      .where(eq(socialAccounts.platformUserId, platformId))
-      .where(eq(socialAccounts.platform, platform));
+      .where(
+        and(
+          eq(socialAccounts.platformUserId, platformId),
+          eq(socialAccounts.platform, platform)
+        )
+      );
     return account;
   }
 
