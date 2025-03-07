@@ -8,6 +8,9 @@ import { pool } from "./db";
 const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
+  sessionStore: session.Store;
+
+  // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
@@ -52,13 +55,7 @@ export interface IStorage {
   restorePost(id: number): Promise<Post>;
   getDeletedPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]>;
 
-  // Newsletter operations
-  getNewsletters(): Promise<Newsletter[]>;
-  createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter>;
-  updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter>;
-  deleteNewsletter(id: number): Promise<void>;
-
-  // Social Media Account Operationen
+  // Social Media Account operations
   getSocialAccounts(): Promise<SocialAccount[]>;
   getSocialAccount(id: number): Promise<SocialAccount | undefined>;
   getSocialAccountByPlatformId(platformId: string, platform: string): Promise<SocialAccount | undefined>;
@@ -77,6 +74,12 @@ export interface IStorage {
   }): Promise<SocialAccount>;
   deleteSocialAccount(id: number): Promise<void>;
 
+  // Newsletter operations
+  getNewsletters(): Promise<Newsletter[]>;
+  createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter>;
+  updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter>;
+  deleteNewsletter(id: number): Promise<void>;
+
   // Analytics operations
   updatePostAnalytics(postId: number, data: {
     impressions: number;
@@ -89,20 +92,19 @@ export interface IStorage {
     updatedAt: Date;
   }): Promise<void>;
 
-  sessionStore: session.Store;
-  // Neue Subtask-Operationen
+  // Subtask operations
   createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask>;
   updateSubtask(id: number, completed: boolean): Promise<SubTask>;
   deleteSubtask(id: number): Promise<void>;
 
-  // Neue Backup-Funktionen
+  // Backup operations
   createBackup(backup: InsertBackup): Promise<Backup>;
   updateBackupStatus(id: number, status: string, error?: string): Promise<Backup>;
   getBackups(): Promise<Backup[]>;
   getLatestBackup(): Promise<Backup | undefined>;
 }
 
-export class DatabaseStorage implements IStorage {
+class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
