@@ -113,6 +113,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // User operations
   async getUsers(): Promise<User[]> {
     return db.select().from(users);
   }
@@ -132,6 +133,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  // Todo operations
   async getTodos(): Promise<(Todo & { subtasks: SubTask[]; assignedTo?: User })[]> {
     const result = await db
       .select({
@@ -202,6 +204,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(todos).where(eq(todos.id, id));
   }
 
+  // Post operations
   async getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]> {
     const result = await db.select({
       post: posts,
@@ -221,6 +224,14 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getPost(id: number): Promise<Post | undefined> {
+    const [post] = await db
+      .select()
+      .from(posts)
+      .where(eq(posts.id, id));
+    return post;
+  }
+
   async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
     const [newPost] = await db.insert(posts).values(post).returning();
     return newPost;
@@ -238,8 +249,6 @@ export class DatabaseStorage implements IStorage {
     postType?: string;
     articleUrl?: string;
   }): Promise<Post> {
-    console.log("Storage: Updating post with data:", data); // Debug logging
-
     const [post] = await db
       .update(posts)
       .set({
@@ -255,24 +264,6 @@ export class DatabaseStorage implements IStorage {
         postType: data.postType,
         articleUrl: data.articleUrl,
       })
-      .where(eq(posts.id, id))
-      .returning();
-    return post;
-  }
-
-  async approvePost(id: number): Promise<Post> {
-    const [post] = await db
-      .update(posts)
-      .set({ approved: true })
-      .where(eq(posts.id, id))
-      .returning();
-    return post;
-  }
-
-  async unapprovePost(id: number): Promise<Post> {
-    const [post] = await db
-      .update(posts)
-      .set({ approved: false })
       .where(eq(posts.id, id))
       .returning();
     return post;
@@ -319,28 +310,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getNewsletters(): Promise<Newsletter[]> {
-    return db.select().from(newsletters);
-  }
-
-  async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
-    const [newNewsletter] = await db.insert(newsletters).values(newsletter).returning();
-    return newNewsletter;
-  }
-
-  async updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter> {
-    const [newsletter] = await db
-      .update(newsletters)
-      .set(data)
-      .where(eq(newsletters.id, id))
-      .returning();
-    return newsletter;
-  }
-
-  async deleteNewsletter(id: number): Promise<void> {
-    await db.delete(newsletters).where(eq(newsletters.id, id));
-  }
-
+  // Social Media Account operations
   async getSocialAccounts(): Promise<SocialAccount[]> {
     return db.select().from(socialAccounts);
   }
@@ -391,6 +361,30 @@ export class DatabaseStorage implements IStorage {
     await db.delete(socialAccounts).where(eq(socialAccounts.id, id));
   }
 
+  // Newsletter operations
+  async getNewsletters(): Promise<Newsletter[]> {
+    return db.select().from(newsletters);
+  }
+
+  async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
+    const [newNewsletter] = await db.insert(newsletters).values(newsletter).returning();
+    return newNewsletter;
+  }
+
+  async updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter> {
+    const [newsletter] = await db
+      .update(newsletters)
+      .set(data)
+      .where(eq(newsletters.id, id))
+      .returning();
+    return newsletter;
+  }
+
+  async deleteNewsletter(id: number): Promise<void> {
+    await db.delete(newsletters).where(eq(newsletters.id, id));
+  }
+
+  // Analytics operations
   async updatePostAnalytics(postId: number, data: {
     impressions: number;
     clicks: number;
@@ -410,14 +404,7 @@ export class DatabaseStorage implements IStorage {
       });
   }
 
-  async getPost(id: number): Promise<Post | undefined> {
-    const [post] = await db
-      .select()
-      .from(posts)
-      .where(eq(posts.id, id));
-    return post;
-  }
-
+  // Subtask operations
   async createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask> {
     const [newSubtask] = await db.insert(subtasks).values(subtask).returning();
     return newSubtask;
@@ -436,6 +423,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(subtasks).where(eq(subtasks.id, id));
   }
 
+  // Backup operations
   async createBackup(backup: InsertBackup): Promise<Backup> {
     const [newBackup] = await db.insert(backups).values(backup).returning();
     return newBackup;
@@ -469,6 +457,24 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(backups.createdAt))
       .limit(1);
     return backup;
+  }
+
+  async approvePost(id: number): Promise<Post> {
+    const [post] = await db
+      .update(posts)
+      .set({ approved: true })
+      .where(eq(posts.id, id))
+      .returning();
+    return post;
+  }
+
+  async unapprovePost(id: number): Promise<Post> {
+    const [post] = await db
+      .update(posts)
+      .set({ approved: false })
+      .where(eq(posts.id, id))
+      .returning();
+    return post;
   }
 }
 
