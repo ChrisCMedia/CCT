@@ -18,37 +18,15 @@ export interface IStorage {
 
   // Todo operations
   getTodos(): Promise<(Todo & { subtasks: SubTask[]; assignedTo?: User })[]>;
-  createTodo(todo: { 
-    title: string; 
-    userId: number; 
-    description?: string; 
-    deadline?: Date; 
-    subtasks?: string[];
-    assignedToUserId?: number;
-  }): Promise<Todo>;
-  updateTodo(id: number, data: { 
-    completed?: boolean; 
-    deadline?: Date;
-    assignedToUserId?: number;
-  }): Promise<Todo>;
+  createTodo(todo: { title: string; userId: number; description?: string; deadline?: Date; subtasks?: string[]; assignedToUserId?: number; }): Promise<Todo>;
+  updateTodo(id: number, data: { completed?: boolean; deadline?: Date; assignedToUserId?: number; }): Promise<Todo>;
   deleteTodo(id: number): Promise<void>;
 
   // Post operations
   getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]>;
   getPost(id: number): Promise<Post | undefined>;
   createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post>;
-  updatePost(id: number, data: {
-    content: string;
-    userId: number;
-    scheduledDate?: Date;
-    accountId?: number;
-    imageUrl?: string;
-    platformPostId?: string;
-    publishStatus?: string;
-    visibility?: string;
-    postType?: string;
-    articleUrl?: string;
-  }): Promise<Post>;
+  updatePost(id: number, data: { content: string; userId: number; scheduledDate?: Date; accountId?: number; imageUrl?: string; platformPostId?: string; publishStatus?: string; visibility?: string; postType?: string; articleUrl?: string; }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   unapprovePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
@@ -59,19 +37,8 @@ export interface IStorage {
   getSocialAccounts(): Promise<SocialAccount[]>;
   getSocialAccount(id: number): Promise<SocialAccount | undefined>;
   getSocialAccountByPlatformId(platformId: string, platform: string): Promise<SocialAccount | undefined>;
-  createSocialAccount(account: InsertSocialAccount & {
-    userId: number;
-    accessToken?: string;
-    refreshToken?: string;
-    tokenExpiresAt?: Date;
-    platformUserId?: string;
-    platformPageId?: string;
-  }): Promise<SocialAccount>;
-  updateSocialAccount(id: number, data: {
-    accessToken?: string;
-    refreshToken?: string;
-    tokenExpiresAt?: Date;
-  }): Promise<SocialAccount>;
+  createSocialAccount(account: InsertSocialAccount & { userId: number; accessToken?: string; refreshToken?: string; tokenExpiresAt?: Date; platformUserId?: string; platformPageId?: string; }): Promise<SocialAccount>;
+  updateSocialAccount(id: number, data: { accessToken?: string; refreshToken?: string; tokenExpiresAt?: Date; }): Promise<SocialAccount>;
   deleteSocialAccount(id: number): Promise<void>;
 
   // Newsletter operations
@@ -81,16 +48,7 @@ export interface IStorage {
   deleteNewsletter(id: number): Promise<void>;
 
   // Analytics operations
-  updatePostAnalytics(postId: number, data: {
-    impressions: number;
-    clicks: number;
-    likes: number;
-    shares: number;
-    comments: number;
-    engagementRate: number;
-    demographicData: any;
-    updatedAt: Date;
-  }): Promise<void>;
+  updatePostAnalytics(postId: number, data: { impressions: number; clicks: number; likes: number; shares: number; comments: number; engagementRate: number; demographicData: any; updatedAt: Date; }): Promise<void>;
 
   // Subtask operations
   createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask>;
@@ -104,7 +62,7 @@ export interface IStorage {
   getLatestBackup(): Promise<Backup | undefined>;
 }
 
-class DatabaseStorage implements IStorage {
+export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
@@ -117,7 +75,7 @@ class DatabaseStorage implements IStorage {
 
   // User operations
   async getUsers(): Promise<User[]> {
-    return db.select().from(users);
+    return await db.select().from(users);
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -314,7 +272,16 @@ class DatabaseStorage implements IStorage {
 
   // Social Media Account operations
   async getSocialAccounts(): Promise<SocialAccount[]> {
-    return db.select().from(socialAccounts);
+    try {
+      const accounts = await db
+        .select()
+        .from(socialAccounts)
+        .orderBy(asc(socialAccounts.platform));
+      return accounts;
+    } catch (error) {
+      console.error("Error fetching social accounts:", error);
+      throw error;
+    }
   }
 
   async getSocialAccount(id: number): Promise<SocialAccount | undefined> {
