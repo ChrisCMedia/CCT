@@ -483,7 +483,8 @@ COPY public.backups (id, created_at, file_name, file_size, status, completed_at,
 29	2025-03-07 14:00:42.580566	backup-2025-03-07T14-00-41-911Z.sql	0	completed	2025-03-07 14:00:46.16	\N
 30	2025-03-07 14:02:24.975623	backup-2025-03-07T14-02-24-541Z.sql	0	completed	2025-03-07 14:02:28.583	\N
 31	2025-03-07 14:05:10.186059	backup-2025-03-07T14-05-06-987Z.sql	0	completed	2025-03-07 14:05:14.547	\N
-32	2025-03-07 14:08:19.462433	backup-2025-03-07T14-08-16-560Z.sql	0	pending	\N	\N
+32	2025-03-07 14:08:19.462433	backup-2025-03-07T14-08-16-560Z.sql	0	completed	2025-03-07 14:08:25.298	\N
+33	2025-03-07 14:10:43.675202	backup-2025-03-07T14-10-40-563Z.sql	0	pending	\N	\N
 \.
 
 
@@ -583,8 +584,8 @@ COPY public.todos (id, title, completed, user_id, description, assigned_to_user_
 --
 
 COPY public.user_sessions (sid, sess, expire) FROM stdin;
-8_mEdslMY7CB1sCjgZg0vYu3E2X1iRbf	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-08T14:00:00.523Z","secure":false,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-08 14:08:23
 H1RE_B91pNQGQl9YV_9F-HbCY2jbU4el	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-08T09:56:37.772Z","secure":true,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-08 13:53:51
+8_mEdslMY7CB1sCjgZg0vYu3E2X1iRbf	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-08T14:00:00.523Z","secure":false,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-08 14:10:47
 \.
 
 
@@ -602,7 +603,7 @@ COPY public.users (id, username, password) FROM stdin;
 -- Name: backups_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
 --
 
-SELECT pg_catalog.setval('public.backups_id_seq', 32, true);
+SELECT pg_catalog.setval('public.backups_id_seq', 33, true);
 
 
 --

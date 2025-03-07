@@ -62,7 +62,7 @@ export interface IStorage {
   getLatestBackup(): Promise<Backup | undefined>;
 }
 
-export class DatabaseStorage implements IStorage {
+class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
@@ -124,14 +124,7 @@ export class DatabaseStorage implements IStorage {
     return Array.from(todosMap.values());
   }
 
-  async createTodo(todo: { 
-    title: string; 
-    userId: number; 
-    description?: string; 
-    deadline?: Date;
-    subtasks?: string[];
-    assignedToUserId?: number;
-  }): Promise<Todo> {
+  async createTodo(todo: { title: string; userId: number; description?: string; deadline?: Date; subtasks?: string[]; assignedToUserId?: number; }): Promise<Todo> {
     const { subtasks: subtaskTitles, ...todoData } = todo;
     const [newTodo] = await db.insert(todos).values(todoData).returning();
 
@@ -147,11 +140,7 @@ export class DatabaseStorage implements IStorage {
     return newTodo;
   }
 
-  async updateTodo(id: number, data: { 
-    completed?: boolean; 
-    deadline?: Date;
-    assignedToUserId?: number;
-  }): Promise<Todo> {
+  async updateTodo(id: number, data: { completed?: boolean; deadline?: Date; assignedToUserId?: number; }): Promise<Todo> {
     const [todo] = await db
       .update(todos)
       .set(data)
@@ -273,11 +262,20 @@ export class DatabaseStorage implements IStorage {
   // Social Media Account operations
   async getSocialAccounts(): Promise<SocialAccount[]> {
     try {
-      const accounts = await db
-        .select()
+      return await db
+        .select({
+          id: socialAccounts.id,
+          platform: socialAccounts.platform,
+          accountName: socialAccounts.accountName,
+          userId: socialAccounts.userId,
+          accessToken: socialAccounts.accessToken,
+          refreshToken: socialAccounts.refreshToken,
+          tokenExpiresAt: socialAccounts.tokenExpiresAt,
+          platformUserId: socialAccounts.platformUserId,
+          platformPageId: socialAccounts.platformPageId,
+        })
         .from(socialAccounts)
         .orderBy(asc(socialAccounts.platform));
-      return accounts;
     } catch (error) {
       console.error("Error fetching social accounts:", error);
       throw error;
@@ -336,7 +334,7 @@ export class DatabaseStorage implements IStorage {
 
   // Newsletter operations
   async getNewsletters(): Promise<Newsletter[]> {
-    return db.select().from(newsletters);
+    return await db.select().from(newsletters);
   }
 
   async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
@@ -416,7 +414,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBackups(): Promise<Backup[]> {
-    return db
+    return await db
       .select()
       .from(backups)
       .orderBy(desc(backups.createdAt));
@@ -451,4 +449,5 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
+// Create and export a single instance of DatabaseStorage
 export const storage = new DatabaseStorage();
