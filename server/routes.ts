@@ -9,14 +9,11 @@ import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocia
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { s3Client, BUCKET_NAME } from "./s3";
-import crypto from "crypto";
 
 const execAsync = promisify(exec);
 
 const upload = multer({
-  storage: multer.memoryStorage(),
+  dest: "uploads/",
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB
   },
@@ -164,28 +161,11 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/posts", upload.single("image"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      let imageUrl: string | undefined;
-
-      if (req.file) {
-        const fileExtension = req.file.originalname.split('.').pop();
-        const uniqueFileName = `${crypto.randomUUID()}.${fileExtension}`;
-        const contentType = req.file.mimetype;
-
-        const uploadCommand = new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: `posts/${uniqueFileName}`,
-          Body: req.file.buffer,
-          ContentType: contentType,
-        });
-
-        await s3Client.send(uploadCommand);
-        imageUrl = `https://${BUCKET_NAME}.r2.cloudflarestorage.com/posts/${uniqueFileName}`;
-      }
-
+      const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
       const postData = {
         content: req.body.content,
         scheduledDate: new Date(req.body.scheduledDate),
-        accountId: Number(req.body.accountIds[0]),
+        accountId: Number(req.body.accountIds[0]), // Nimm den ersten Account aus der Liste
         imageUrl,
         userId: req.user.id,
       };
@@ -198,32 +178,13 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.patch("/api/posts/:id", upload.single("image"), async (req, res) => {
+  app.patch("/api/posts/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       // Hole den existierenden Post
       const existingPost = await storage.getPost(Number(req.params.id));
       if (!existingPost) {
         return res.status(404).json({ message: "Post nicht gefunden" });
-      }
-
-      let imageUrl = existingPost.imageUrl;
-
-      // Handle image upload if a new image is provided
-      if (req.file) {
-        const fileExtension = req.file.originalname.split('.').pop();
-        const uniqueFileName = `${crypto.randomUUID()}.${fileExtension}`;
-        const contentType = req.file.mimetype;
-
-        const uploadCommand = new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: `posts/${uniqueFileName}`,
-          Body: req.file.buffer,
-          ContentType: contentType,
-        });
-
-        await s3Client.send(uploadCommand);
-        imageUrl = `https://${BUCKET_NAME}.r2.cloudflarestorage.com/posts/${uniqueFileName}`;
       }
 
       // Parse and validate the scheduled date
@@ -246,7 +207,7 @@ export function registerRoutes(app: Express): Server {
         userId: req.user.id,
         scheduledDate: scheduledDate ?? existingPost.scheduledDate,
         accountId: req.body.accountId ? Number(req.body.accountId) : existingPost.accountId,
-        imageUrl: imageUrl,
+        imageUrl: req.body.imageUrl ?? existingPost.imageUrl,
         visibility: req.body.visibility ?? existingPost.visibility,
         postType: req.body.postType ?? existingPost.postType,
         articleUrl: req.body.articleUrl ?? existingPost.articleUrl,
