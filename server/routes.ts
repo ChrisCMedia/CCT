@@ -12,25 +12,8 @@ import fs from "fs";
 
 const execAsync = promisify(exec);
 
-// Stelle sicher, dass das Verzeichnis für permanente Uploads existiert
-const PERMANENT_UPLOAD_DIR = path.join(process.cwd(), "attached_assets");
-if (!fs.existsSync(PERMANENT_UPLOAD_DIR)) {
-  fs.mkdirSync(PERMANENT_UPLOAD_DIR, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: function (_req, _file, cb) {
-    cb(null, PERMANENT_UPLOAD_DIR);
-  },
-  filename: function (_req, file, cb) {
-    // Generiere einen einzigartigen Dateinamen mit Timestamp
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
 const upload = multer({
-  storage: storage,
+  dest: "uploads/",
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB
   },
@@ -47,8 +30,8 @@ const upload = multer({
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
-  // Serve uploaded files from the permanent directory
-  app.use("/attached_assets", express.static(PERMANENT_UPLOAD_DIR));
+  // Serve uploaded files
+  app.use("/uploads", express.static("uploads"));
 
   // Get all users for assignment
   app.get("/api/users", async (req, res) => {
@@ -178,7 +161,7 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/posts", upload.single("image"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const imageUrl = req.file ? `/attached_assets/${req.file.filename}` : undefined;
+      const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
       const postData = {
         content: req.body.content,
         scheduledDate: new Date(req.body.scheduledDate),

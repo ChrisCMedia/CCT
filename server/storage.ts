@@ -1,6 +1,6 @@
 import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc, isNotNull, isNull, desc, and } from "drizzle-orm";
+import { eq, asc, isNotNull, isNull, desc } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -8,38 +8,94 @@ import { pool } from "./db";
 const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
-  sessionStore: session.Store;
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getUsers(): Promise<User[]>;
+
+  // Todo operations
   getTodos(): Promise<(Todo & { subtasks: SubTask[]; assignedTo?: User })[]>;
-  createTodo(todo: { title: string; userId: number; description?: string; deadline?: Date; subtasks?: string[]; assignedToUserId?: number; }): Promise<Todo>;
-  updateTodo(id: number, data: { completed?: boolean; deadline?: Date; assignedToUserId?: number; }): Promise<Todo>;
+  createTodo(todo: { 
+    title: string; 
+    userId: number; 
+    description?: string; 
+    deadline?: Date; 
+    subtasks?: string[];
+    assignedToUserId?: number;
+  }): Promise<Todo>;
+  updateTodo(id: number, data: { 
+    completed?: boolean; 
+    deadline?: Date;
+    assignedToUserId?: number;
+  }): Promise<Todo>;
   deleteTodo(id: number): Promise<void>;
+
+  // Post operations
   getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]>;
   getPost(id: number): Promise<Post | undefined>;
   createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post>;
-  updatePost(id: number, data: { content: string; userId: number; scheduledDate?: Date; accountId?: number; imageUrl?: string; platformPostId?: string; publishStatus?: string; visibility?: string; postType?: string; articleUrl?: string; }): Promise<Post>;
+  updatePost(id: number, data: {
+    content: string;
+    userId: number;
+    scheduledDate?: Date;
+    accountId?: number;
+    imageUrl?: string;
+    platformPostId?: string;
+    publishStatus?: string;
+    visibility?: string;
+    postType?: string;
+    articleUrl?: string;
+  }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   unapprovePost(id: number): Promise<Post>;
   deletePost(id: number): Promise<void>;
   restorePost(id: number): Promise<Post>;
   getDeletedPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]>;
-  getSocialAccounts(): Promise<SocialAccount[]>;
-  getSocialAccount(id: number): Promise<SocialAccount | undefined>;
-  getSocialAccountByPlatformId(platformId: string, platform: string): Promise<SocialAccount | undefined>;
-  createSocialAccount(account: InsertSocialAccount & { userId: number; accessToken?: string; refreshToken?: string; tokenExpiresAt?: Date; platformUserId?: string; platformPageId?: string; }): Promise<SocialAccount>;
-  updateSocialAccount(id: number, data: { accessToken?: string; refreshToken?: string; tokenExpiresAt?: Date; }): Promise<SocialAccount>;
-  deleteSocialAccount(id: number): Promise<void>;
+
+  // Newsletter operations
   getNewsletters(): Promise<Newsletter[]>;
   createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter>;
   updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter>;
   deleteNewsletter(id: number): Promise<void>;
-  updatePostAnalytics(postId: number, data: { impressions: number; clicks: number; likes: number; shares: number; comments: number; engagementRate: number; demographicData: any; updatedAt: Date; }): Promise<void>;
+
+  // Social Media Account Operationen
+  getSocialAccounts(): Promise<SocialAccount[]>;
+  getSocialAccount(id: number): Promise<SocialAccount | undefined>;
+  getSocialAccountByPlatformId(platformId: string, platform: string): Promise<SocialAccount | undefined>;
+  createSocialAccount(account: InsertSocialAccount & {
+    userId: number;
+    accessToken?: string;
+    refreshToken?: string;
+    tokenExpiresAt?: Date;
+    platformUserId?: string;
+    platformPageId?: string;
+  }): Promise<SocialAccount>;
+  updateSocialAccount(id: number, data: {
+    accessToken?: string;
+    refreshToken?: string;
+    tokenExpiresAt?: Date;
+  }): Promise<SocialAccount>;
+  deleteSocialAccount(id: number): Promise<void>;
+
+  // Analytics operations
+  updatePostAnalytics(postId: number, data: {
+    impressions: number;
+    clicks: number;
+    likes: number;
+    shares: number;
+    comments: number;
+    engagementRate: number;
+    demographicData: any;
+    updatedAt: Date;
+  }): Promise<void>;
+
+  sessionStore: session.Store;
+  // Neue Subtask-Operationen
   createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask>;
   updateSubtask(id: number, completed: boolean): Promise<SubTask>;
   deleteSubtask(id: number): Promise<void>;
+
+  // Neue Backup-Funktionen
   createBackup(backup: InsertBackup): Promise<Backup>;
   updateBackupStatus(id: number, status: string, error?: string): Promise<Backup>;
   getBackups(): Promise<Backup[]>;
@@ -47,7 +103,7 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  public sessionStore: session.Store;
+  sessionStore: session.Store;
 
   constructor() {
     this.sessionStore = new PostgresSessionStore({
@@ -58,7 +114,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUsers(): Promise<User[]> {
-    return await db.select().from(users);
+    return db.select().from(users);
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -106,7 +162,14 @@ export class DatabaseStorage implements IStorage {
     return Array.from(todosMap.values());
   }
 
-  async createTodo(todo: { title: string; userId: number; description?: string; deadline?: Date; subtasks?: string[]; assignedToUserId?: number; }): Promise<Todo> {
+  async createTodo(todo: { 
+    title: string; 
+    userId: number; 
+    description?: string; 
+    deadline?: Date;
+    subtasks?: string[];
+    assignedToUserId?: number;
+  }): Promise<Todo> {
     const { subtasks: subtaskTitles, ...todoData } = todo;
     const [newTodo] = await db.insert(todos).values(todoData).returning();
 
@@ -122,7 +185,11 @@ export class DatabaseStorage implements IStorage {
     return newTodo;
   }
 
-  async updateTodo(id: number, data: { completed?: boolean; deadline?: Date; assignedToUserId?: number; }): Promise<Todo> {
+  async updateTodo(id: number, data: { 
+    completed?: boolean; 
+    deadline?: Date;
+    assignedToUserId?: number;
+  }): Promise<Todo> {
     const [todo] = await db
       .update(todos)
       .set(data)
@@ -154,20 +221,25 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getPost(id: number): Promise<Post | undefined> {
-    const [post] = await db
-      .select()
-      .from(posts)
-      .where(eq(posts.id, id));
-    return post;
-  }
-
   async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
     const [newPost] = await db.insert(posts).values(post).returning();
     return newPost;
   }
 
-  async updatePost(id: number, data: { content: string; userId: number; scheduledDate?: Date; accountId?: number; imageUrl?: string; platformPostId?: string; publishStatus?: string; visibility?: string; postType?: string; articleUrl?: string; }): Promise<Post> {
+  async updatePost(id: number, data: {
+    content: string;
+    userId: number;
+    scheduledDate?: Date;
+    accountId?: number;
+    imageUrl?: string;
+    platformPostId?: string;
+    publishStatus?: string;
+    visibility?: string;
+    postType?: string;
+    articleUrl?: string;
+  }): Promise<Post> {
+    console.log("Storage: Updating post with data:", data); // Debug logging
+
     const [post] = await db
       .update(posts)
       .set({
@@ -247,8 +319,30 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getNewsletters(): Promise<Newsletter[]> {
+    return db.select().from(newsletters);
+  }
+
+  async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
+    const [newNewsletter] = await db.insert(newsletters).values(newsletter).returning();
+    return newNewsletter;
+  }
+
+  async updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter> {
+    const [newsletter] = await db
+      .update(newsletters)
+      .set(data)
+      .where(eq(newsletters.id, id))
+      .returning();
+    return newsletter;
+  }
+
+  async deleteNewsletter(id: number): Promise<void> {
+    await db.delete(newsletters).where(eq(newsletters.id, id));
+  }
+
   async getSocialAccounts(): Promise<SocialAccount[]> {
-    return await db.select().from(socialAccounts);
+    return db.select().from(socialAccounts);
   }
 
   async getSocialAccount(id: number): Promise<SocialAccount | undefined> {
@@ -263,12 +357,8 @@ export class DatabaseStorage implements IStorage {
     const [account] = await db
       .select()
       .from(socialAccounts)
-      .where(
-        and(
-          eq(socialAccounts.platformUserId, platformId),
-          eq(socialAccounts.platform, platform)
-        )
-      );
+      .where(eq(socialAccounts.platformUserId, platformId))
+      .where(eq(socialAccounts.platform, platform));
     return account;
   }
 
@@ -301,28 +391,6 @@ export class DatabaseStorage implements IStorage {
     await db.delete(socialAccounts).where(eq(socialAccounts.id, id));
   }
 
-  async getNewsletters(): Promise<Newsletter[]> {
-    return await db.select().from(newsletters);
-  }
-
-  async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
-    const [newNewsletter] = await db.insert(newsletters).values(newsletter).returning();
-    return newNewsletter;
-  }
-
-  async updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter> {
-    const [newsletter] = await db
-      .update(newsletters)
-      .set(data)
-      .where(eq(newsletters.id, id))
-      .returning();
-    return newsletter;
-  }
-
-  async deleteNewsletter(id: number): Promise<void> {
-    await db.delete(newsletters).where(eq(newsletters.id, id));
-  }
-
   async updatePostAnalytics(postId: number, data: {
     impressions: number;
     clicks: number;
@@ -340,6 +408,14 @@ export class DatabaseStorage implements IStorage {
         target: [postAnalytics.postId],
         set: data,
       });
+  }
+
+  async getPost(id: number): Promise<Post | undefined> {
+    const [post] = await db
+      .select()
+      .from(posts)
+      .where(eq(posts.id, id));
+    return post;
   }
 
   async createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask> {
@@ -379,7 +455,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBackups(): Promise<Backup[]> {
-    return await db
+    return db
       .select()
       .from(backups)
       .orderBy(desc(backups.createdAt));
@@ -396,5 +472,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-// Create and export a single instance of DatabaseStorage
-export const storage: IStorage = new DatabaseStorage();
+export const storage = new DatabaseStorage();
