@@ -1,0 +1,270 @@
+Ich möchte, dass du den Bild-Upload in meinem Social-Media-Postplaner so anpasst, dass hochgeladene Bilder dauerhaft in meiner bestehenden PostgreSQL-Datenbank gespeichert werden. Aktuell werden die Bilder nur temporär im uploads/-Ordner gespeichert und gehen verloren, wenn das Repl neu startet. Wir speichern die Bilder als Base64-Strings in der Datenbank und zeigen sie im Frontend an. Bitte implementiere die folgenden Schritte, um dies zu erreichen:
+
+Datenbankstruktur anpassen:
+Prüfe, ob die Tabelle posts in meiner PostgreSQL-Datenbank existiert.
+Falls nicht, erstelle sie mit folgendem SQL-Befehl:
+sql
+
+Collapse
+
+Wrap
+
+Copy
+CREATE TABLE posts (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    image_data TEXT, -- Für den Base64-String des Bildes
+    approved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+Falls die Tabelle bereits existiert, füge die Spalte image_data hinzu, falls sie noch nicht vorhanden ist:
+sql
+
+Collapse
+
+Wrap
+
+Copy
+ALTER TABLE posts ADD COLUMN image_data TEXT;
+Backend anpassen:
+Stelle sicher, dass die Pakete express, multer und pg installiert sind. Falls nicht, installiere sie mit:
+bash
+
+Collapse
+
+Wrap
+
+Copy
+npm install express multer pg
+Bearbeite die Datei server/index.js (oder die Hauptdatei meines Backend-Servers) und füge einen Endpunkt hinzu, der Bilder hochlädt, sie in einen Base64-String umwandelt und in der Datenbank speichert. Der Code sollte wie folgt aussehen:
+javascript
+
+Collapse
+
+Wrap
+
+Copy
+const express = require('express');
+const multer = require('multer');
+const { Pool } = require('pg');
+const fs = require('fs');
+
+const app = express();
+app.use(express.json());
+
+const upload = multer({ dest: 'uploads/' });
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
+
+app.post('/upload', upload.single('image'), async (req, res) => {
+    try {
+        const imagePath = req.file.path;
+        const imageBuffer = fs.readFileSync(imagePath);
+        const base64Image = imageBuffer.toString('base64');
+        const { title, description } = req.body;
+
+        const result = await pool.query(
+            'INSERT INTO posts (title, description, image_data) VALUES ($1, $2, $3) RETURNING id',
+            [title, description, base64Image]
+        );
+
+        fs.unlinkSync(imagePath);
+        res.status(201).json({ message: 'Post erfolgreich erstellt', postId: result.rows[0].id });
+    } catch (error) {
+        console.error('Fehler beim Hochladen:', error);
+        res.status(500).json({ error: 'Fehler beim Hochladen des Bildes' });
+    }
+});
+
+app.get('/posts', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM posts ORDER BY created_at DESC');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Fehler beim Abrufen der Posts:', error);
+        res.status(500).json({ error: 'Fehler beim Abrufen der Posts' });
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server läuft auf Port ${PORT}`);
+});
+Falls server/index.js bereits anderen Code enthält, integriere die neuen Endpunkte /upload und /posts in die bestehende Struktur, ohne bestehende Funktionalitäten zu überschreiben.
+Frontend anpassen:
+Bearbeite die Hauptkomponente meines Frontends (vermutlich client/src/App.jsx), um ein Formular für den Upload eines Posts mit Bild zu erstellen und die Posts anzuzeigen. Der Code sollte wie folgt aussehen:
+jsx
+
+Collapse
+
+Wrap
+
+Copy
+import React, { useState, useEffect } from 'react';
+
+function App() {
+    const [posts, setPosts] = useState([]);
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [image, setImage] = useState(null);
+
+    useEffect(() => {
+        fetchPosts();
+    }, []);
+
+    const fetchPosts = async () => {
+        try {
+            const response = await fetch('/posts');
+            const data = await response.json();
+            setPosts(data);
+        } catch (error) {
+            console.error('Fehler beim Abrufen der Posts:', error);
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('description', description);
+        formData.append('image', image);
+
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const result = await response.json();
+            console.log('Post erstellt:', result);
+
+            fetchPosts();
+            setTitle('');
+            setDescription('');
+            setImage(null);
+        } catch (error) {
+            console.error('Fehler beim Hochladen:', error);
+        }
+    };
+
+    return (
+        <div className="p-4">
+            <h1 className="text-2xl font-bold mb-4">Social Media Planungstool</h1>
+
+            <form onSubmit={handleSubmit} className="mb-8">
+                <div className="mb-4">
+                    <label className="block mb-1">Titel:</label>
+                    <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="border p-2 w-full"
+                        required
+                    />
+                </div>
+                <div className="mb-4">
+                    <label className="block mb-1">Beschreibung:</label>
+                    <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        className="border p-2 w-full"
+                    />
+                </div>
+                <div className="mb-4">
+                    <label className="block mb-1">Bild hochladen:</label>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setImage(e.target.files[0])}
+                        className="border p-2 w-full"
+                        required
+                    />
+                </div>
+                <button type="submit" className="bg-blue-500 text-white p-2 rounded">
+                    Post erstellen
+                </button>
+            </form>
+
+            <h2 className="text-xl font-bold mb-4">Erstellte Posts</h2>
+            <div className="grid gap-4">
+                {posts.map((post) => (
+                    <div key={post.id} className="border p-4 rounded">
+                        <h3 className="text-lg font-bold">{post.title}</h3>
+                        <p>{post.description}</p>
+                        {post.image_data && (
+                            <img
+                                src={`data:image/jpeg;base64,${post.image_data}`}
+                                alt={post.title}
+                                className="mt-2 max-w-xs"
+                            />
+                        )}
+                        <p>Status: {post.approved ? 'Genehmigt' : 'Nicht genehmigt'}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export default App;
+Falls App.jsx bereits anderen Code enthält, integriere das Formular und die Anzeige der Posts in die bestehende Struktur, ohne bestehende Funktionalitäten zu überschreiben.
+CORS und Proxy konfigurieren:
+Installiere cors im Backend:
+bash
+
+Collapse
+
+Wrap
+
+Copy
+npm install cors
+Füge in server/index.js vor den Routen folgende Zeile hinzu:
+javascript
+
+Collapse
+
+Wrap
+
+Copy
+const cors = require('cors');
+app.use(cors());
+Bearbeite vite.config.ts, um einen Proxy einzurichten, damit das Frontend mit dem Backend kommunizieren kann:
+javascript
+
+Collapse
+
+Wrap
+
+Copy
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+    server: {
+        proxy: {
+            '/upload': 'http://localhost:3000',
+            '/posts': 'http://localhost:3000',
+        },
+    },
+});
+Testen und Fehlerbehebung:
+Starte das Repl und teste den Upload eines Posts mit Bild über das Frontend-Formular.
+Überprüfe, ob das Bild korrekt als Base64-String in der image_data-Spalte der posts-Tabelle gespeichert wird.
+Stelle sicher, dass die Posts mit Bildern im Frontend korrekt angezeigt werden.
+Wenn Fehler auftreten, gib mir eine detaillierte Fehlermeldung und Vorschläge zur Behebung.
+Zusätzliche Hinweise:
+
+Begrenze die Dateigröße der hochgeladenen Bilder auf 5 MB, um die Datenbank nicht zu überlasten. Passe die Multer-Konfiguration in server/index.js wie folgt an:
+javascript
+
+Collapse
+
+Wrap
+
+Copy
+const upload = multer({ dest: 'uploads/', limits: { fileSize: 5 * 1024 * 1024 } });
+Stelle sicher, dass Tailwind CSS korrekt funktioniert, da ich tailwind.config.ts in meinem Projekt habe.
+Bitte implementiere diese Schritte präzise und gib mir Rückmeldung, wenn alles funktioniert oder wenn Anpassungen nötig sind.
