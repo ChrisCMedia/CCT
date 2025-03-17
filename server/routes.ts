@@ -143,18 +143,25 @@ export function registerRoutes(app: Express): Server {
     try {
       const parsed = insertPostSchema.safeParse(req.body);
       if (!parsed.success) {
+        console.log("Validation Error:", parsed.error);
         return res.status(400).json(parsed.error);
       }
 
       const postData = {
         content: parsed.data.content,
         scheduledDate: parsed.data.scheduledDate,
-        accountId: parsed.data.accountIds[0], // Take the first account from the list
+        accountId: parsed.data.accountIds[0],
         imageUrl: parsed.data.image ? `data:${parsed.data.image.contentType};base64,${parsed.data.image.data}` : undefined,
         userId: req.user.id,
+        publishStatus: 'draft',
+        visibility: parsed.data.visibility || 'public',
+        postType: parsed.data.postType || 'post',
+        articleUrl: parsed.data.articleUrl,
       };
 
+      console.log("Creating post with data:", postData);
       const post = await storage.createPost(postData);
+      console.log("Post created:", post);
       res.json(post);
     } catch (error) {
       console.error("Error creating post:", error);

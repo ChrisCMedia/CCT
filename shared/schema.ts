@@ -77,7 +77,7 @@ export const subtasksRelations = relations(subtasks, ({ one }) => ({
 export const posts = pgTable("posts", {
   id: serial("id").primaryKey(),
   content: text("content").notNull(),
-  imageUrl: text("image_url"), 
+  imageUrl: text("image_url"),
   scheduledDate: timestamp("scheduled_date").notNull(),
   approved: boolean("approved").notNull().default(false),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
@@ -197,9 +197,12 @@ export const insertPostSchema = createInsertSchema(posts)
     scheduledDate: z.coerce.date(),
     accountIds: z.array(z.number()).min(1, "Mindestens ein Account muss ausgewählt werden"),
     image: z.object({
-      data: z.string(), 
-      contentType: z.string(), 
+      data: z.string(),
+      contentType: z.string(),
     }).optional(),
+    visibility: z.string().optional(),
+    postType: z.string().optional(),
+    articleUrl: z.string().optional(),
   });
 
 export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
