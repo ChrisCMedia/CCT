@@ -106,7 +106,7 @@ export default function PostPlannerPage() {
       const formData = new FormData();
       formData.append("content", data.content);
       formData.append("scheduledDate", data.scheduledDate.toISOString());
-      data.accountIds.forEach((id) => formData.append("accountIds[]", id.toString()));
+      formData.append("accountIds[]", data.accountIds[0].toString());
       if (data.image) {
         formData.append("image", data.image);
       }
@@ -128,7 +128,10 @@ export default function PostPlannerPage() {
       setSelectedDate(undefined);
       setSelectedAccount(undefined);
       setSelectedImage(null);
-      setPreviewUrl(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
       toast({
         title: "Post erstellt",
         description: "Ihr Post wurde erfolgreich geplant",
@@ -138,48 +141,40 @@ export default function PostPlannerPage() {
 
   const updatePostMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
-      // Wenn ein Bild dabei ist, FormData verwenden
-      if (updates.image) {
-        const formData = new FormData();
-        formData.append("content", updates.content);
-        formData.append("scheduledDate", updates.scheduledDate.toISOString());
+      const formData = new FormData();
+      formData.append("content", updates.content);
+      formData.append("scheduledDate", updates.scheduledDate.toISOString());
+      if (updates.accountId) {
         formData.append("accountId", updates.accountId.toString());
+      }
+      if (updates.image) {
         formData.append("image", updates.image);
-
-        if (updates.visibility) formData.append("visibility", updates.visibility);
-        if (updates.postType) formData.append("postType", updates.postType);
-        if (updates.articleUrl) formData.append("articleUrl", updates.articleUrl);
-
-        const res = await fetch(`/api/posts/${id}`, {
-          method: "PATCH",
-          body: formData,
-        });
-
-        if (!res.ok) throw new Error("Fehler beim Aktualisieren des Posts");
-        return res.json();
+      }
+      if (updates.visibility) {
+        formData.append("visibility", updates.visibility);
+      }
+      if (updates.postType) {
+        formData.append("postType", updates.postType);
+      }
+      if (updates.articleUrl) {
+        formData.append("articleUrl", updates.articleUrl);
       }
 
-      // Ohne Bild, JSON verwenden
       const res = await fetch(`/api/posts/${id}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: updates.content,
-          scheduledDate: updates.scheduledDate.toISOString(),
-          accountId: updates.accountId,
-          visibility: updates.visibility,
-          postType: updates.postType,
-          articleUrl: updates.articleUrl,
-        }),
+        body: formData,
       });
 
-      if (!res.ok) throw new Error("Fehler beim Aktualisieren des Posts");
+      if (!res.ok) {
+        throw new Error("Fehler beim Aktualisieren des Posts");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      if (editingPreviewUrl) {
+        URL.revokeObjectURL(editingPreviewUrl);
+      }
       resetEditingState();
       toast({
         title: "Post aktualisiert",

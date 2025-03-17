@@ -26,7 +26,7 @@ const upload = multer({
   },
 });
 
-export function registerRoutes(app: Express): Server {
+export function registerRoutes(app: express.Application): Server {
   setupAuth(app);
 
   // Serve uploaded files
@@ -160,7 +160,12 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/posts", upload.single("image"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+      let imageUrl;
+      if (req.file) {
+        // Erstelle einen absoluten Pfad für das Bild
+        imageUrl = `/uploads/${req.file.filename}`;
+      }
+
       const postData = {
         content: req.body.content,
         scheduledDate: new Date(req.body.scheduledDate),
@@ -177,7 +182,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.patch("/api/posts/:id", async (req, res) => {
+  app.patch("/api/posts/:id", upload.single("image"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const existingPost = await storage.getPost(Number(req.params.id));
@@ -185,24 +190,30 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ message: "Post nicht gefunden" });
       }
 
-      const parsed = insertPostSchema.partial().safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json(parsed.error);
+      let imageUrl = existingPost.imageUrl;
+      if (req.file) {
+        imageUrl = `/uploads/${req.file.filename}`;
+
+        // Optional: Lösche das alte Bild
+        if (existingPost.imageUrl) {
+          const oldImagePath = path.join(process.cwd(), existingPost.imageUrl.slice(1));
+          try {
+            await fs.promises.unlink(oldImagePath);
+          } catch (err) {
+            console.error("Error deleting old image:", err);
+          }
+        }
       }
 
-      const imageUrl = parsed.data.image
-        ? `/uploads/${parsed.data.image.filename}`
-        : existingPost.imageUrl;
-
       const post = await storage.updatePost(Number(req.params.id), {
-        content: parsed.data.content ?? existingPost.content,
+        content: req.body.content,
         userId: req.user.id,
-        scheduledDate: parsed.data.scheduledDate ?? existingPost.scheduledDate,
-        accountId: parsed.data.accountIds?.[0] ?? existingPost.accountId,
+        scheduledDate: req.body.scheduledDate ? new Date(req.body.scheduledDate) : undefined,
+        accountId: req.body.accountId ? Number(req.body.accountId) : undefined,
         imageUrl,
-        visibility: parsed.data.visibility ?? existingPost.visibility,
-        postType: parsed.data.postType ?? existingPost.postType,
-        articleUrl: parsed.data.articleUrl ?? existingPost.articleUrl,
+        visibility: req.body.visibility,
+        postType: req.body.postType,
+        articleUrl: req.body.articleUrl,
       });
       res.json(post);
     } catch (error) {
