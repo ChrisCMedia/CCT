@@ -2,8 +2,6 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import multer from "multer";
-import path from "path";
 import express from "express";
 import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema } from "@shared/schema";
 import { exec } from "child_process";
@@ -12,26 +10,8 @@ import fs from "fs";
 
 const execAsync = promisify(exec);
 
-const upload = multer({
-  dest: "uploads/",
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
-  },
-  fileFilter: (_req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
-    if (!allowedTypes.includes(file.mimetype)) {
-      cb(new Error("Nur Bilder sind erlaubt"));
-      return;
-    }
-    cb(null, true);
-  },
-});
-
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
-
-  // Serve uploaded files
-  app.use("/uploads", express.static("uploads"));
 
   // Get all users for assignment
   app.get("/api/users", async (req, res) => {
@@ -158,15 +138,19 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/posts", upload.single("image"), async (req, res) => {
+  app.post("/api/posts", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+      const parsed = insertPostSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json(parsed.error);
+      }
+
       const postData = {
-        content: req.body.content,
-        scheduledDate: new Date(req.body.scheduledDate),
-        accountId: Number(req.body.accountIds[0]), // Nimm den ersten Account aus der Liste
-        imageUrl,
+        content: parsed.data.content,
+        scheduledDate: parsed.data.scheduledDate,
+        accountId: parsed.data.accountIds[0], // Take the first account from the list
+        imageUrl: parsed.data.image ? `data:${parsed.data.image.contentType};base64,${parsed.data.image.data}` : undefined,
         userId: req.user.id,
       };
 
@@ -181,36 +165,29 @@ export function registerRoutes(app: Express): Server {
   app.patch("/api/posts/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      // Hole den existierenden Post
       const existingPost = await storage.getPost(Number(req.params.id));
       if (!existingPost) {
         return res.status(404).json({ message: "Post nicht gefunden" });
       }
 
-      // Parse and validate the scheduled date
-      let scheduledDate: Date | undefined;
-      if (req.body.scheduledDate) {
-        try {
-          scheduledDate = new Date(req.body.scheduledDate);
-          if (isNaN(scheduledDate.getTime())) {
-            return res.status(400).json({ message: "Ungültiges Datumsformat" });
-          }
-        } catch (error) {
-          return res.status(400).json({ message: "Fehler beim Parsen des Datums" });
-        }
+      const parsed = insertPostSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json(parsed.error);
       }
 
-      console.log("Request body:", req.body); // Debug logging
+      const imageUrl = parsed.data.image 
+        ? `data:${parsed.data.image.contentType};base64,${parsed.data.image.data}`
+        : existingPost.imageUrl;
 
       const post = await storage.updatePost(Number(req.params.id), {
-        content: req.body.content ?? existingPost.content,
+        content: parsed.data.content ?? existingPost.content,
         userId: req.user.id,
-        scheduledDate: scheduledDate ?? existingPost.scheduledDate,
-        accountId: req.body.accountId ? Number(req.body.accountId) : existingPost.accountId,
-        imageUrl: req.body.imageUrl ?? existingPost.imageUrl,
-        visibility: req.body.visibility ?? existingPost.visibility,
-        postType: req.body.postType ?? existingPost.postType,
-        articleUrl: req.body.articleUrl ?? existingPost.articleUrl,
+        scheduledDate: parsed.data.scheduledDate ?? existingPost.scheduledDate,
+        accountId: parsed.data.accountIds?.[0] ?? existingPost.accountId,
+        imageUrl,
+        visibility: parsed.data.visibility ?? existingPost.visibility,
+        postType: parsed.data.postType ?? existingPost.postType,
+        articleUrl: parsed.data.articleUrl ?? existingPost.articleUrl,
       });
       res.json(post);
     } catch (error) {

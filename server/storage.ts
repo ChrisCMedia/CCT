@@ -222,7 +222,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
-    const [newPost] = await db.insert(posts).values(post).returning();
+    const [newPost] = await db.insert(posts).values({
+      ...post,
+      imageUrl: post.imageUrl,
+    }).returning();
     return newPost;
   }
 
@@ -238,8 +241,6 @@ export class DatabaseStorage implements IStorage {
     postType?: string;
     articleUrl?: string;
   }): Promise<Post> {
-    console.log("Storage: Updating post with data:", data); // Debug logging
-
     const [post] = await db
       .update(posts)
       .set({
