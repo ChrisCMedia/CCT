@@ -1,8 +1,6 @@
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import multer from "multer";
-import path from "path";
 import express from "express";
 import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema } from "@shared/schema";
 import { exec } from "child_process";
@@ -11,23 +9,12 @@ import fs from "fs";
 
 const execAsync = promisify(exec);
 
-const upload = multer({
-  dest: "uploads/",
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
-  },
-  fileFilter: (_req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
-    if (!allowedTypes.includes(file.mimetype)) {
-      cb(new Error("Nur Bilder sind erlaubt"));
-      return;
-    }
-    cb(null, true);
-  },
-});
-
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
+
+  // Configure body parser for larger payloads (Base64 images)
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // Serve uploaded files
   app.use("/uploads", express.static("uploads"));
@@ -157,15 +144,19 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/posts", upload.single("image"), async (req, res) => {
+  app.post("/api/posts", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+      const parsed = insertPostSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json(parsed.error);
+      }
+
       const postData = {
-        content: req.body.content,
-        scheduledDate: new Date(req.body.scheduledDate),
-        accountId: Number(req.body.accountIds[0]), // Take first account from list
-        imageUrl,
+        content: parsed.data.content,
+        scheduledDate: parsed.data.scheduledDate,
+        accountId: parsed.data.accountIds[0],
+        imageUrl: parsed.data.image ? `data:${parsed.data.image.contentType};base64,${parsed.data.image.data}` : undefined,
         userId: req.user.id,
       };
 
@@ -190,8 +181,8 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json(parsed.error);
       }
 
-      const imageUrl = parsed.data.image
-        ? `/uploads/${parsed.data.image.filename}`
+      const imageUrl = parsed.data.image 
+        ? `data:${parsed.data.image.contentType};base64,${parsed.data.image.data}`
         : existingPost.imageUrl;
 
       const post = await storage.updatePost(Number(req.params.id), {

@@ -727,7 +727,8 @@ COPY public.backups (id, created_at, file_name, file_size, status, completed_at,
 273	2025-03-17 07:19:35.757098	backup-2025-03-17T07-19-32-730Z.sql	0	completed	2025-03-17 07:19:38.997	\N
 274	2025-03-17 07:28:32.492756	backup-2025-03-17T07-28-32-072Z.sql	0	completed	2025-03-17 07:28:35.639	\N
 275	2025-03-17 07:30:29.377377	backup-2025-03-17T07-30-28-955Z.sql	0	completed	2025-03-17 07:30:32.421	\N
-276	2025-03-17 07:33:14.91967	backup-2025-03-17T07-33-11-990Z.sql	0	pending	\N	\N
+276	2025-03-17 07:33:14.91967	backup-2025-03-17T07-33-11-990Z.sql	0	completed	2025-03-17 07:33:20.298	\N
+277	2025-03-17 07:35:13.463367	backup-2025-03-17T07-35-12-942Z.sql	0	pending	\N	\N
 \.
 
 
@@ -829,6 +830,7 @@ COPY public.posts (id, content, scheduled_date, approved, user_id, image_url, ac
 69	kannst Du die ersten beiden Punkte neu machen bitte - nicht immer B2CThemen!! Ich bin Investmentmaklerin!! Das ist mir alles zuviel in die falsche Richtung auch wenn humorvoll!!\nbitte auf Residential oder Healtchcare oder Hotel oder Büro was finden..\n\n\n😂 Tag der Ehrlichkeit – Zeit für die ungeschminkte Wahrheit! 🤭\n\nHeute ist Tag der Ehrlichkeit, also also reden wir mal Klartext! 💬\n\n🔹 Ehrlich gesagt… Ich liebe meinen Job, aber wenn jemand sagt „Ich suche etwas Schönes, Günstiges und in bester Lage“, dann muss ich manchmal kurz schmunzeln. 😅\n\n🔹 Ehrlich gesagt… Besichtigungen sind nicht immer so glamourös wie in Hochglanzbroschüren. Schon mal in einem dunklen Keller nach dem Lichtschalter gesucht und stattdessen eine Spinnwebe gefunden? Been there. 🕷️💡\n\n🔹 Ehrlich gesagt… Immobilien sind Vertrauenssache. Und genau deshalb ist Ehrlichkeit das A und O. Wer offen kommuniziert – egal ob als Maklerin, Käufer oder Verkäufer – wird am Ende die besten Entscheidungen treffen. 🏡✨\n\nAber jetzt mal ehrlich – wann hat Dir schon mal eine ungefilterte Wahrheit den Tag gerettet (oder ruiniert)? Schreib es mir in die Kommentare, ich bin gespannt auf Deine Geschichten! 😆👇\n\n#TagDerEhrlichkeit #Tacheles #ImmobilienMitWahrheit #SpaßMussSein #Menschlichkeit #Vertrauen #YOURTIMES #JudithLenz	2025-04-29 22:00:00	f	8	\N	6	2025-03-13 19:18:23.509	7	\N	public	\N	post	draft	\N	\N
 61	💼 1. Mai – Tag der Arbeit: Mehr als nur ein freier Tag 💪\r\n\r\nHeute ist Tag der Arbeit – ein Tag, der uns daran erinnert, wie wichtig unsere tägliche Arbeit ist, aber auch, wie wertvoll gute Arbeitsbedingungen, Fairness und gegenseitige Wertschätzung sind.\r\n\r\nArbeit ist so viel mehr als nur ein Mittel zum Zweck. Sie gibt uns Struktur, Sinn und oft auch Erfüllung. Besonders in der Immobilienbranche sehe ich, wie Leidenschaft und Engagement den Unterschied machen. 🏡 Es sind nicht nur die Abschlüsse, die zählen, sondern die Menschen, die mit Herzblut daran arbeiten, dass Wohnträume Wirklichkeit werden.\r\n\r\nAber heute geht es auch darum, innezuhalten: Arbeit ist wichtig – aber unsere Gesundheit, unser Wohlbefinden und unser Miteinander sind es auch.\r\n\r\nIch bin dankbar für mein großartiges Team, für Partnerinnen und Partner, die gemeinsam mit mir an einem Strang ziehen, und für alle, die mit Einsatz und Hingabe ihren Teil dazu beitragen, dass wir gemeinsam wachsen. 🙌\r\n\r\n💬 Was bedeutet Arbeit für Dich? Erfüllung, Herausforderung, Gemeinschaft? Schreib es gern in die Kommentare – ich freue mich auf Deine Gedanken!\r\n\r\n#TagDerArbeit #Leidenschaft #Fairness #Immobilien #Zusammenhalt #Menschlichkeit #YOURTIMES	2025-04-30 22:00:00	t	8	\N	6	2025-03-13 19:22:04.876	7	\N	public	\N	post	draft	\N	\N
 56	Gute Idee aber doch nicht passend derzeit durch unsere anderen Themen. Und der Sonntag ist mir nicht wichtig. Danke für die Mühe aber vllt. können wir den Inhalt noch wann anders verwenden. Ist mir schon wiederzu viel B2C. Ah jetzt sehe ich erst, dass es ein Repost ist. Ne verzichten wir drauf. Nur YT postet.\n\n📖 16. März – Tag der Informationsfreiheit: Wissen teilen, Vertrauen stärken 💡\n\nIn einer Welt, die sich ständig verändert, ist Information der Schlüssel zu Fortschritt, Transparenz und Vertrauen. Genau darum geht es am Tag der Informationsfreiheit: Wissen zugänglich machen und Barrieren abbauen.\n\nIm Immobilienbereich zeigt sich das besonders deutlich. 🏡 Menschen stehen oft vor großen Entscheidungen – sei es der Kauf eines Eigenheims, eine Investition oder ein Mietvertrag. Und was brauchen sie dabei? Klare, verständliche und ehrliche Informationen.\n\n✨ Für mich bedeutet Informationsfreiheit:\n\t•\tOffenheit: Meine Kundinnen und Kunden haben ein Recht darauf, alle Fakten zu kennen – kein Kleingedrucktes, keine versteckten Haken.\n\t•\tBildung: Wer informiert ist, trifft bessere Entscheidungen. Deswegen nehme ich mir die Zeit, Hintergründe und Zusammenhänge zu erklären.\n\t•\tVertrauen: Transparente Kommunikation schafft Sicherheit – und Sicherheit ist die Basis jeder erfolgreichen Zusammenarbeit.\n\n💡 Stell Dir vor, wie viel einfacher Entscheidungen in allen Lebensbereichen wären, wenn wir immer offen und ehrlich miteinander kommunizieren würden.\n\n💬 Wie wichtig ist Dir Transparenz und Informationsfreiheit in Deinem Alltag? Ich bin gespannt auf Deine Perspektive – teile sie gern in den Kommentaren!\n\n#TagDerInformationsfreiheit #Transparenz #WissenIstMacht #Immobilien #Vertrauen #Menschlichkeit #Zusammenarbeit	2025-03-15 23:00:00	f	8	\N	6	2025-03-13 18:31:49.786	7	\N	public	\N	post	draft	\N	\N
+99	TEST TEST TEST. TEST	2025-03-17 23:00:00	f	8	\N	7	\N	\N	\N	public	\N	post	deleted	\N	2025-03-17 07:33:56.753
 \.
 
 
@@ -875,8 +877,8 @@ COPY public.todos (id, title, completed, user_id, description, assigned_to_user_
 --
 
 COPY public.user_sessions (sid, sess, expire) FROM stdin;
-1f6gTD1JKQkej9dCkSWheQ6XyUgDq7GX	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-18T07:15:42.046Z","secure":false,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-18 07:31:15
-PdhXQqITuUVkC0TEDP1tDm4QRrzDAqby	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-18T07:17:20.968Z","secure":false,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-18 07:33:18
+PdhXQqITuUVkC0TEDP1tDm4QRrzDAqby	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-18T07:17:20.968Z","secure":false,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-18 07:34:43
+1f6gTD1JKQkej9dCkSWheQ6XyUgDq7GX	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-18T07:15:42.046Z","secure":false,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-18 07:34:43
 _ox9rtkIBiIREJie1ijIPwEe7bbcfysu	{"cookie":{"originalMaxAge":86400000,"expires":"2025-03-17T12:58:20.305Z","secure":true,"httpOnly":true,"path":"/"},"passport":{"user":8}}	2025-03-18 07:11:20
 \.
 
@@ -895,7 +897,7 @@ COPY public.users (id, username, password) FROM stdin;
 -- Name: backups_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
 --
 
-SELECT pg_catalog.setval('public.backups_id_seq', 276, true);
+SELECT pg_catalog.setval('public.backups_id_seq', 277, true);
 
 
 --
@@ -923,7 +925,7 @@ SELECT pg_catalog.setval('public.post_analytics_id_seq', 1, false);
 -- Name: posts_id_seq; Type: SEQUENCE SET; Schema: public; Owner: neondb_owner
 --
 
-SELECT pg_catalog.setval('public.posts_id_seq', 98, true);
+SELECT pg_catalog.setval('public.posts_id_seq', 99, true);
 
 
 --
