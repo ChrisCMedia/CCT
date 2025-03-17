@@ -14,6 +14,10 @@ const execAsync = promisify(exec);
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
+  // Configure body parsing middleware
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
   // Get all users for assignment
   app.get("/api/users", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -143,11 +147,20 @@ export function registerRoutes(app: Express): Server {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       console.log("Received post data:", req.body);
+      console.log("Content-Type:", req.headers['content-type']);
 
-      // Ensure date is properly formatted
+      // Ensure required fields are present
+      if (!req.body.content || !req.body.scheduledDate || !req.body.accountIds) {
+        return res.status(400).json({ 
+          message: "Missing required fields",
+          required: ['content', 'scheduledDate', 'accountIds'],
+          received: req.body 
+        });
+      }
+
       const formData = {
         ...req.body,
-        scheduledDate: req.body.scheduledDate ? new Date(req.body.scheduledDate).toISOString() : undefined
+        scheduledDate: new Date(req.body.scheduledDate).toISOString()
       };
 
       console.log("Formatted data for validation:", formData);
