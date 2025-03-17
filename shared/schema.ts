@@ -194,15 +194,9 @@ export const insertPostSchema = createInsertSchema(posts)
     articleUrl: true,
   })
   .extend({
-    scheduledDate: z.string().transform((str) => new Date(str)),
+    scheduledDate: z.coerce.date(),
     accountIds: z.array(z.number()).min(1, "Mindestens ein Account muss ausgewählt werden"),
-    image: z.object({
-      data: z.string(),
-      contentType: z.string(),
-    }).optional(),
-    visibility: z.string().optional(),
-    postType: z.string().optional(),
-    articleUrl: z.string().optional(),
+    image: z.instanceof(File).optional(),
   });
 
 export const insertNewsletterSchema = createInsertSchema(newsletters).pick({

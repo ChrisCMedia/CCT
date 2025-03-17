@@ -1,22 +1,36 @@
-import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
+import multer from "multer";
+import path from "path";
 import express from "express";
 import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema } from "@shared/schema";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
-import path from 'path';
 
 const execAsync = promisify(exec);
+
+const upload = multer({
+  dest: "uploads/",
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      cb(new Error("Nur Bilder sind erlaubt"));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
-  // Configure body parsing middleware
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  // Serve uploaded files
+  app.use("/uploads", express.static("uploads"));
 
   // Get all users for assignment
   app.get("/api/users", async (req, res) => {
@@ -143,53 +157,23 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/posts", async (req, res) => {
+  app.post("/api/posts", upload.single("image"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      console.log("Received post data:", req.body);
-      console.log("Content-Type:", req.headers['content-type']);
-
-      // Ensure required fields are present
-      if (!req.body.content || !req.body.scheduledDate || !req.body.accountIds) {
-        return res.status(400).json({ 
-          message: "Missing required fields",
-          required: ['content', 'scheduledDate', 'accountIds'],
-          received: req.body 
-        });
-      }
-
-      const formData = {
-        ...req.body,
-        scheduledDate: new Date(req.body.scheduledDate).toISOString()
-      };
-
-      console.log("Formatted data for validation:", formData);
-
-      const parsed = insertPostSchema.safeParse(formData);
-      if (!parsed.success) {
-        console.log("Validation Error:", parsed.error);
-        return res.status(400).json(parsed.error);
-      }
-
+      const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
       const postData = {
-        content: parsed.data.content,
-        scheduledDate: parsed.data.scheduledDate,
-        accountId: parsed.data.accountIds[0],
-        imageUrl: parsed.data.image ? `data:${parsed.data.image.contentType};base64,${parsed.data.image.data}` : undefined,
+        content: req.body.content,
+        scheduledDate: new Date(req.body.scheduledDate),
+        accountId: Number(req.body.accountIds[0]), // Take first account from list
+        imageUrl,
         userId: req.user.id,
-        publishStatus: 'draft',
-        visibility: parsed.data.visibility || 'public',
-        postType: parsed.data.postType || 'post',
-        articleUrl: parsed.data.articleUrl,
       };
 
-      console.log("Creating post with data:", postData);
       const post = await storage.createPost(postData);
-      console.log("Post created:", post);
       res.json(post);
     } catch (error) {
       console.error("Error creating post:", error);
-      res.status(500).json({ message: "Failed to create post", error: error.message });
+      res.status(500).json({ message: "Failed to create post" });
     }
   });
 
@@ -206,8 +190,8 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json(parsed.error);
       }
 
-      const imageUrl = parsed.data.image 
-        ? `data:${parsed.data.image.contentType};base64,${parsed.data.image.data}`
+      const imageUrl = parsed.data.image
+        ? `/uploads/${parsed.data.image.filename}`
         : existingPost.imageUrl;
 
       const post = await storage.updatePost(Number(req.params.id), {
