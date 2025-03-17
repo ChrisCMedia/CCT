@@ -194,7 +194,7 @@ export const insertPostSchema = createInsertSchema(posts)
     articleUrl: true,
   })
   .extend({
-    scheduledDate: z.coerce.date(),
+    scheduledDate: z.string().transform((str) => new Date(str)),
     accountIds: z.array(z.number()).min(1, "Mindestens ein Account muss ausgewählt werden"),
     image: z.object({
       data: z.string(),

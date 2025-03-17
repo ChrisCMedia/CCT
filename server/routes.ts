@@ -7,6 +7,7 @@ import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocia
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
+import path from 'path';
 
 const execAsync = promisify(exec);
 
@@ -141,7 +142,17 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/posts", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const parsed = insertPostSchema.safeParse(req.body);
+      console.log("Received post data:", req.body);
+
+      // Ensure date is properly formatted
+      const formData = {
+        ...req.body,
+        scheduledDate: req.body.scheduledDate ? new Date(req.body.scheduledDate).toISOString() : undefined
+      };
+
+      console.log("Formatted data for validation:", formData);
+
+      const parsed = insertPostSchema.safeParse(formData);
       if (!parsed.success) {
         console.log("Validation Error:", parsed.error);
         return res.status(400).json(parsed.error);
@@ -165,7 +176,7 @@ export function registerRoutes(app: Express): Server {
       res.json(post);
     } catch (error) {
       console.error("Error creating post:", error);
-      res.status(500).json({ message: "Failed to create post" });
+      res.status(500).json({ message: "Failed to create post", error: error.message });
     }
   });
 
