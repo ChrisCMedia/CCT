@@ -196,10 +196,7 @@ export const insertPostSchema = createInsertSchema(posts)
   .extend({
     scheduledDate: z.coerce.date(),
     accountIds: z.array(z.number()).min(1, "Mindestens ein Account muss ausgewählt werden"),
-    image: z.object({
-      data: z.string(), // Base64 image data
-      contentType: z.string(), // MIME type
-    }).optional(),
+    image: z.instanceof(File).optional(),
   });
 
 export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
