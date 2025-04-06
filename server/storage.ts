@@ -8,15 +8,30 @@ import { pool } from "./db";
 
 // Wähle den passenden Session-Store basierend auf der Datenbankverbindung
 let sessionStore: session.Store;
-if (pool) {
-  const PostgresSessionStore = connectPg(session);
-  sessionStore = new PostgresSessionStore({
-    pool,
-    tableName: "user_sessions",
-    createTableIfMissing: true,
-  });
-} else {
-  // Fallback auf Memory Store für SQLite oder andere Datenbanken ohne PostgreSQL
+
+try {
+  if (pool) {
+    console.log("Verwende PostgreSQL Session-Store");
+    const PostgresSessionStore = connectPg(session);
+    sessionStore = new PostgresSessionStore({
+      pool,
+      tableName: "user_sessions",
+      createTableIfMissing: true,
+    });
+    console.log("PostgreSQL Session-Store wurde erfolgreich initialisiert");
+  } else {
+    // Fallback auf Memory Store für SQLite oder andere Datenbanken ohne PostgreSQL
+    console.log("Verwende Memory Session-Store (Fallback)");
+    const MemoryStore = memorystore(session);
+    sessionStore = new MemoryStore({
+      checkPeriod: 86400000 // Bereinige abgelaufene Einträge alle 24h
+    });
+    console.log("Memory Session-Store wurde erfolgreich initialisiert");
+  }
+} catch (error) {
+  console.error("Fehler bei der Initialisierung des Session-Stores:", error);
+  // Fallback auf einen Memory-Store im Fehlerfall
+  console.log("Verwende Memory Session-Store als Fehler-Fallback");
   const MemoryStore = memorystore(session);
   sessionStore = new MemoryStore({
     checkPeriod: 86400000 // Bereinige abgelaufene Einträge alle 24h
