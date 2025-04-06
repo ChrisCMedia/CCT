@@ -11,7 +11,7 @@ import path from "path";
 import fs from "fs";
 import cors from "cors";
 import { initializeDatabase } from "./dbInit";
-import { configureAuth } from "./auth";
+import { setupAuth } from "./auth";
 
 // Declare module für node-cron, um TypeScript-Fehler zu vermeiden
 declare module 'node-cron';
@@ -194,7 +194,7 @@ if (!process.env.VERCEL) {
     setupLinkedInAuth(app);
 
     // Auth-Konfiguration
-    configureAuth(app, storage);
+    setupAuth(app, storage);
 
     // Globale Fehlerbehandlung
     app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
