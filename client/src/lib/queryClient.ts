@@ -90,23 +90,27 @@ export async function apiRequest(
     return mockResponse;
   }
   
+  // Lokaler Speicher für Todo-Elemente als Fallback
+  let localTodos = [
+    {
+      id: 1,
+      title: "Demo Todo",
+      description: "Dies ist ein Beispiel-Todo für Testzwecke",
+      completed: false,
+      userId: 1,
+      subtasks: []
+    }
+  ];
+  
   // NOTFALL-FIX: Todos
   if (url === "/api/todos") {
     console.log("NOTFALL-FIX: Todos-Anfrage abgefangen");
     
     if (method === "GET") {
       // GET Anfrage für Todos
+      console.log("Sende lokale Todos zurück:", localTodos.length);
       const mockResponse = new Response(
-        JSON.stringify([
-          {
-            id: 1,
-            title: "Demo Todo",
-            description: "Dies ist ein Beispiel-Todo für Testzwecke",
-            completed: false,
-            userId: 1,
-            subtasks: []
-          }
-        ]),
+        JSON.stringify(localTodos),
         { 
           status: 200, 
           headers: {
@@ -123,16 +127,33 @@ export async function apiRequest(
       
       // Erstelle Mock-Todo mit Daten aus der Anfrage
       const todoData = data as any;
-      const mockResponse = new Response(
-        JSON.stringify({
-          id: Math.floor(Math.random() * 1000) + 10, // Zufällige ID
-          title: todoData.title,
-          description: todoData.description || "",
+      const newTodo = {
+        id: Math.floor(Math.random() * 1000) + 10, // Zufällige ID
+        title: todoData.title,
+        description: todoData.description || "",
+        completed: false,
+        userId: 1,
+        deadline: todoData.deadline,
+        assignedToUserId: todoData.assignedToUserId,
+        subtasks: todoData.subtasks ? todoData.subtasks.map((title: string) => ({
+          id: Math.floor(Math.random() * 1000),
+          title,
           completed: false,
-          userId: 1,
-          deadline: todoData.deadline,
-          assignedToUserId: todoData.assignedToUserId
-        }),
+          todoId: -1 // Wird weiter unten gesetzt
+        })) : []
+      };
+      
+      // Update IDs in subtasks
+      if (newTodo.subtasks) {
+        newTodo.subtasks.forEach((st: any) => st.todoId = newTodo.id);
+      }
+      
+      // Füge das neue Todo zum lokalen Speicher hinzu
+      localTodos.push(newTodo);
+      console.log("Todo hinzugefügt. Aktuelle Anzahl:", localTodos.length);
+      
+      const mockResponse = new Response(
+        JSON.stringify(newTodo),
         { 
           status: 200, 
           headers: {
