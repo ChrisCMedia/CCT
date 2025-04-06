@@ -1,10 +1,10 @@
 import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup, postComments, PostComment, InsertPostComment } from "@shared/schema";
-import { db } from "./db";
+import { db } from "./db.js";
 import { eq, asc, isNotNull, isNull, desc, and, or, sql, gt, gte, lt, lte, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import memorystore from 'memorystore';
-import { pool } from "./db";
+import { pool } from "./db.js";
 
 // Session-Store Konfiguration
 let sessionStore: session.Store;

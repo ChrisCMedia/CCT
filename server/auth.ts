@@ -4,7 +4,7 @@ import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 
 // Konvertiere callback-basiertes scrypt zu Promise-basiert
 const scryptAsync = promisify(scrypt);
