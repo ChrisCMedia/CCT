@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+// Auskommentieren des problematischen Imports
+// import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupLinkedInAuth } from "./linkedin";
 import cron from "node-cron";
@@ -176,12 +177,84 @@ if (!process.env.VERCEL) {
       }
     }
 
-    // Versuch mit Try/Catch, die Routes zu registrieren
+    setupLinkedInAuth(app);
+
+    // Auth-Konfiguration VOR den Routen
+    log("Konfiguriere Authentifizierung...");
+    setupAuth(app, storage);
+    
+    // Jetzt erst die Routen registrieren
     let server;
     try {
       log("Versuche Routes zu registrieren...");
-      server = registerRoutes(app);
-      log("Routes erfolgreich registriert");
+      
+      // Direkte Implementierung der API-Routen
+      log("Registriere API-Routen direkt...");
+      
+      // Todos-Routen
+      app.get("/api/todos", async (req, res) => {
+        try {
+          const userId = req.user?.id;
+          if (!userId) {
+            return res.status(401).json({ message: "Nicht autorisiert" });
+          }
+          const todos = await storage.getTodos(userId);
+          return res.json(todos);
+        } catch (error: any) {
+          console.error("Fehler beim Abrufen der Todos:", error);
+          return res.status(500).json({ message: "Interner Serverfehler" });
+        }
+      });
+      
+      app.post("/api/todos", async (req, res) => {
+        try {
+          const userId = req.user?.id;
+          if (!userId) {
+            return res.status(401).json({ message: "Nicht autorisiert" });
+          }
+          const todo = await storage.createTodo({ ...req.body, userId });
+          return res.status(201).json(todo);
+        } catch (error: any) {
+          console.error("Fehler beim Erstellen eines Todos:", error);
+          return res.status(500).json({ message: "Interner Serverfehler" });
+        }
+      });
+      
+      // Social Accounts Routen
+      app.get("/api/social-accounts", async (req, res) => {
+        try {
+          const userId = req.user?.id;
+          if (!userId) {
+            return res.status(401).json({ message: "Nicht autorisiert" });
+          }
+          const accounts = await storage.getSocialAccounts(userId);
+          return res.json(accounts);
+        } catch (error: any) {
+          console.error("Fehler beim Abrufen der Social Accounts:", error);
+          return res.status(500).json({ message: "Interner Serverfehler" });
+        }
+      });
+      
+      // Posts Routen
+      app.get("/api/posts", async (req, res) => {
+        try {
+          const userId = req.user?.id;
+          if (!userId) {
+            return res.status(401).json({ message: "Nicht autorisiert" });
+          }
+          const posts = await storage.getPosts(userId);
+          return res.json(posts);
+        } catch (error: any) {
+          console.error("Fehler beim Abrufen der Posts:", error);
+          return res.status(500).json({ message: "Interner Serverfehler" });
+        }
+      });
+      
+      // HTTP-Server erstellen
+      const http = await import('http');
+      server = http.createServer(app);
+      
+      log("API-Routen erfolgreich registriert");
     } catch (routesError: any) {
       log(`FEHLER beim Registrieren der Routes: ${routesError.message}`);
       log(`Stack-Trace: ${routesError.stack}`);
@@ -190,11 +263,6 @@ if (!process.env.VERCEL) {
       const http = await import('http');
       server = http.createServer(app);
     }
-
-    setupLinkedInAuth(app);
-
-    // Auth-Konfiguration
-    setupAuth(app, storage);
 
     // Globale Fehlerbehandlung
     app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
