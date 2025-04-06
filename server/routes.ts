@@ -191,10 +191,38 @@ export function registerRoutes(app: express.Application): Server {
         imageUrl = `/uploads/${req.file.filename}`;
       }
 
+      // Stelle sicher, dass accountIds als Array existiert
+      let accountId;
+      if (req.body.accountIds) {
+        // Wenn es ein Array ist, nehme das erste Element
+        if (Array.isArray(req.body.accountIds)) {
+          accountId = Number(req.body.accountIds[0]);
+        } else if (typeof req.body.accountIds === 'string') {
+          // Wenn es ein String ist, versuche zu parsen (könnte ein JSON-Array sein)
+          try {
+            const accountIdsArray = JSON.parse(req.body.accountIds);
+            accountId = Number(accountIdsArray[0]);
+          } catch (e) {
+            // Falls es ein einzelner String ist, versuche ihn direkt zu konvertieren
+            accountId = Number(req.body.accountIds);
+          }
+        }
+      }
+
+      // Fallback auf accountId Feld, falls vorhanden
+      if (!accountId && req.body.accountId) {
+        accountId = Number(req.body.accountId);
+      }
+
+      // Falls keine accountId gefunden wurde, verwende Standard-Account 1
+      if (!accountId) {
+        accountId = 1; // Standard-Account (LinkedIn Demo Account)
+      }
+
       const postData = {
         content: req.body.content,
         scheduledDate: new Date(req.body.scheduledDate),
-        accountId: Number(req.body.accountIds[0]), // Take first account from list
+        accountId: accountId,
         imageUrl,
         userId: req.user.id,
       };
