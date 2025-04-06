@@ -7,3 +7,4 @@ vite.config.ts.*
 .env
 local_dev.db
 uploads/
+package-lock.json
