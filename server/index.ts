@@ -12,6 +12,20 @@ import fs from "fs";
 import cors from "cors";
 import { initializeDatabase } from "./dbInit";
 
+// Prozessweite Fehlerbehandlung
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Beende den Prozess nicht, aber protokolliere den Fehler
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Protokolliere den Fehler, beende aber den Prozess nicht in Produktion
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
+
 const execAsync = promisify(exec);
 
 const app = express();
@@ -115,8 +129,17 @@ if (!process.env.VERCEL) {
   try {
     // Initialisiere die Datenbank vor dem Serverstart
     log("Initialisiere Datenbank...");
-    await initializeDatabase();
-    log("Datenbank erfolgreich initialisiert");
+    try {
+      await initializeDatabase();
+      log("Datenbank erfolgreich initialisiert");
+    } catch (dbInitError) {
+      log(`Fehler bei der Datenbankinitialisierung: ${dbInitError.message}`);
+      log(`Stack-Trace: ${dbInitError.stack}`);
+      // In Produktion versuchen wir trotzdem weiterzumachen
+      if (process.env.NODE_ENV !== 'production') {
+        throw dbInitError; // In Entwicklung neu werfen
+      }
+    }
 
     const server = registerRoutes(app);
     setupLinkedInAuth(app);
@@ -136,8 +159,14 @@ if (!process.env.VERCEL) {
         });
       }
       
+      // In Produktion senden wir auch Stack-Traces in Logfiles, aber nicht zum Client
+      console.error(`API Error (${status}) at ${req.path}:`, err.stack || err.message);
+      
       // Sende nur grundlegende Fehlerinformationen in Produktion
-      res.status(status).json({ message });
+      res.status(status).json({ 
+        message, 
+        error: process.env.NODE_ENV !== 'production' ? err.stack : undefined 
+      });
     });
 
     if (app.get("env") === "development") {
@@ -154,6 +183,7 @@ if (!process.env.VERCEL) {
       log(`Server successfully started and listening on port ${PORT}`);
       log(`Environment: ${app.get("env")}`);
       log(`CORS: ${app.get("env") === 'production' ? 'Enabled for production domains' : 'Enabled for localhost'}`);
+      log(`Database URL: ${process.env.DATABASE_URL ? 'Configured' : 'Not configured'}`);
     });
 
     // Nur in Produktionsumgebung Backup erstellen
@@ -165,7 +195,8 @@ if (!process.env.VERCEL) {
       log("Überspringe Backup in Entwicklungsumgebung oder auf Vercel");
     }
   } catch (error) {
-    log(`Failed to start server: ${error}`);
+    log(`KRITISCHER FEHLER beim Serverstart: ${error}`);
+    console.error("Stack-Trace:", error.stack);
     process.exit(1);
   }
 })();
