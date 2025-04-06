@@ -18,11 +18,12 @@ const app = express();
 // CORS konfigurieren
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://deine-domain.com', 'https://www.deine-domain.com'] 
+    ? process.env.FRONTEND_URL || true  // Erlaubt alle Ursprünge in Produktion, wenn FRONTEND_URL nicht gesetzt ist
     : 'http://localhost:5001',
   credentials: true, // Wichtig für Cookies und Authentifizierung
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Set-Cookie'],
 }));
 
 app.use(express.json());

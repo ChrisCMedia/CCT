@@ -35,9 +35,10 @@ export function setupAuth(app: Express) {
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      secure: app.get("env") === "production",
+      secure: app.get("env") === "production" ? true : false,
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000 // 24 Stunden
+      maxAge: 24 * 60 * 60 * 1000, // 24 Stunden
+      sameSite: app.get("env") === "production" ? 'none' : 'lax'
     }
   };
 
@@ -79,6 +80,8 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       console.log("Registrierungsversuch für:", req.body.username);
+      console.log("Request-Körper:", JSON.stringify(req.body));
+      
       if (!req.body.username || !req.body.password) {
         console.log("Registrierung fehlgeschlagen: Fehlende Daten");
         return res.status(400).json({ message: "Benutzername und Passwort sind erforderlich" });
@@ -104,6 +107,7 @@ export function setupAuth(app: Express) {
           console.error("Login nach Registrierung fehlgeschlagen:", err);
           return next(err);
         }
+        console.log("Benutzer erfolgreich angemeldet nach Registrierung, Session-ID:", req.sessionID);
         const { password, ...userWithoutPassword } = user;
         res.status(201).json(userWithoutPassword);
       });
@@ -116,6 +120,7 @@ export function setupAuth(app: Express) {
   app.post("/api/login", (req, res) => {
     try {
       console.log("Login-Versuch für:", req.body.username);
+      console.log("Request-Körper:", JSON.stringify(req.body));
       
       if (!req.body.username || !req.body.password) {
         console.log("Login fehlgeschlagen: Fehlende Daten");
@@ -140,6 +145,7 @@ export function setupAuth(app: Express) {
           }
           
           console.log("Login erfolgreich für Benutzer:", user.id);
+          console.log("Session-ID:", req.sessionID);
           const { password, ...userWithoutPassword } = user;
           return res.status(200).json(userWithoutPassword);
         });

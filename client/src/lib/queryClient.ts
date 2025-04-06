@@ -20,7 +20,11 @@ export async function apiRequest(
 ): Promise<Response> {
   console.log(`Anfrage: ${method} ${url}`);
   
-  const headers: HeadersInit = {};
+  const headers: HeadersInit = {
+    "Accept": "application/json",
+    "X-Requested-With": "XMLHttpRequest"
+  };
+  
   if (data) {
     headers["Content-Type"] = "application/json";
   }
@@ -35,6 +39,7 @@ export async function apiRequest(
     });
     
     console.log(`Antwort: ${res.status} ${res.statusText}`);
+    console.log("Response Headers:", [...res.headers.entries()].map(([k, v]) => `${k}: ${v}`).join(", "));
     
     if (!res.ok) {
       await throwIfResNotOk(res);
@@ -58,11 +63,17 @@ export const getQueryFn: <T>(options: {
       console.log(`Abfrage: GET ${url}`);
       
       const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+          "X-Requested-With": "XMLHttpRequest"
+        },
         credentials: "include",
         mode: "cors",
       });
       
       console.log(`Antwort: ${res.status} ${res.statusText}`);
+      console.log("Response Headers:", [...res.headers.entries()].map(([k, v]) => `${k}: ${v}`).join(", "));
 
       if (unauthorizedBehavior === "returnNull" && res.status === 401) {
         return null;
