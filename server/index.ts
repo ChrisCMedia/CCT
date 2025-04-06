@@ -4,6 +4,7 @@ import cors from "cors";
 import path from "path";
 import passport from "passport";
 import session from "express-session";
+import http from 'http';
 import { initializeDatabase } from "./dbInit";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
@@ -46,6 +47,17 @@ app.use(express.static(path.join(process.cwd(), 'dist', 'client')));
 setupAuth(app);
 
 // API-Routen registrieren
+// User-Route
+app.get('/api/user', (req, res) => {
+  log('User-Info-Anfrage, authentifiziert: ' + req.isAuthenticated());
+  
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'Nicht angemeldet' });
+  }
+  
+  return res.json(req.user);
+});
+
 // Todo-Routen
 app.get('/api/todos', async (req, res) => {
   if (!req.isAuthenticated()) {
@@ -111,7 +123,6 @@ async function startServer() {
     
     // Server starten
     const PORT = parseInt(process.env.PORT || '5001', 10);
-    const http = require('http');
     const server = http.createServer(app);
     
     server.listen(PORT, "0.0.0.0", () => {
