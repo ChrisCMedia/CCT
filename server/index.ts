@@ -9,10 +9,22 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import fs from "fs";
+import cors from "cors";
 
 const execAsync = promisify(exec);
 
 const app = express();
+
+// CORS konfigurieren
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://deine-domain.com', 'https://www.deine-domain.com'] 
+    : 'http://localhost:5001',
+  credentials: true, // Wichtig für Cookies und Authentifizierung
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -102,12 +114,23 @@ if (!process.env.VERCEL) {
     const server = registerRoutes(app);
     setupLinkedInAuth(app);
 
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    // Globale Fehlerbehandlung
+    app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
-      log(`Error occurred: ${err.message}`);
+      log(`Error occurred: ${err.stack || err.message}`);
+      
+      // Sende detaillierte Fehlerinformationen in Entwicklungsumgebung
+      if (app.get("env") === "development") {
+        return res.status(status).json({
+          message,
+          error: err.stack || err.toString(),
+          path: req.path
+        });
+      }
+      
+      // Sende nur grundlegende Fehlerinformationen in Produktion
       res.status(status).json({ message });
-      throw err;
     });
 
     if (app.get("env") === "development") {
@@ -122,6 +145,8 @@ if (!process.env.VERCEL) {
     const PORT = process.env.PORT || 5001;
     server.listen(PORT, "0.0.0.0", () => {
       log(`Server successfully started and listening on port ${PORT}`);
+      log(`Environment: ${app.get("env")}`);
+      log(`CORS: ${app.get("env") === 'production' ? 'Enabled for production domains' : 'Enabled for localhost'}`);
     });
 
     // Nur in Produktionsumgebung Backup erstellen

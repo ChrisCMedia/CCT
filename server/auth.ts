@@ -79,51 +79,75 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       console.log("Registrierungsversuch für:", req.body.username);
+      if (!req.body.username || !req.body.password) {
+        console.log("Registrierung fehlgeschlagen: Fehlende Daten");
+        return res.status(400).json({ message: "Benutzername und Passwort sind erforderlich" });
+      }
+
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
         console.log("Registrierung fehlgeschlagen: Benutzername existiert bereits");
         return res.status(400).json({ message: "Benutzername existiert bereits" });
       }
 
+      const hashedPassword = await hashPassword(req.body.password);
+      
       const user = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
+        username: req.body.username,
+        password: hashedPassword
       });
 
-      console.log("Benutzer erfolgreich erstellt:", user.id);
+      console.log("Benutzer erfolgreich erstellt mit ID:", user.id);
+      
       req.login(user, (err) => {
         if (err) {
           console.error("Login nach Registrierung fehlgeschlagen:", err);
           return next(err);
         }
-        res.status(201).json(user);
+        const { password, ...userWithoutPassword } = user;
+        res.status(201).json(userWithoutPassword);
       });
     } catch (error) {
       console.error("Fehler bei der Registrierung:", error);
-      next(error);
+      res.status(500).json({ message: "Registrierung fehlgeschlagen", error: error.message });
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
-    console.log("Login-Versuch für:", req.body.username);
-    passport.authenticate("local", (err, user, info) => {
-      if (err) {
-        console.error("Passport Auth Fehler:", err);
-        return next(err);
+  app.post("/api/login", (req, res) => {
+    try {
+      console.log("Login-Versuch für:", req.body.username);
+      
+      if (!req.body.username || !req.body.password) {
+        console.log("Login fehlgeschlagen: Fehlende Daten");
+        return res.status(400).json({ message: "Benutzername und Passwort sind erforderlich" });
       }
-      if (!user) {
-        console.log("Login fehlgeschlagen: Ungültige Anmeldeinformationen");
-        return res.status(401).json({ message: "Ungültige Anmeldeinformationen" });
-      }
-      req.login(user, (err) => {
+      
+      passport.authenticate("local", (err, user, info) => {
         if (err) {
-          console.error("Login-Sitzung konnte nicht erstellt werden:", err);
-          return next(err);
+          console.error("Passport Auth Fehler:", err);
+          return res.status(500).json({ message: "Authentifizierungsfehler", error: err.message });
         }
-        console.log("Login erfolgreich für Benutzer:", user.id);
-        return res.status(200).json(user);
-      });
-    })(req, res, next);
+        
+        if (!user) {
+          console.log("Login fehlgeschlagen: Ungültige Anmeldeinformationen");
+          return res.status(401).json({ message: "Ungültige Anmeldeinformationen" });
+        }
+        
+        req.login(user, (err) => {
+          if (err) {
+            console.error("Login-Sitzung konnte nicht erstellt werden:", err);
+            return res.status(500).json({ message: "Sitzung konnte nicht erstellt werden", error: err.message });
+          }
+          
+          console.log("Login erfolgreich für Benutzer:", user.id);
+          const { password, ...userWithoutPassword } = user;
+          return res.status(200).json(userWithoutPassword);
+        });
+      })(req, res);
+    } catch (error) {
+      console.error("Unerwarteter Fehler beim Login:", error);
+      res.status(500).json({ message: "Login fehlgeschlagen", error: error.message });
+    }
   });
 
   app.post("/api/logout", (req, res, next) => {
