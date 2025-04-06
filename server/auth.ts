@@ -4,7 +4,7 @@ import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { storage } from "./storage";
+import { storage, DatabaseStorage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 
 declare global {
@@ -45,7 +45,7 @@ async function comparePasswords(supplied: string, stored: string): Promise<boole
   }
 }
 
-export function configureAuth(app: Express, storage: typeof storage) {
+export function configureAuth(app: Express, storage: DatabaseStorage) {
   console.log("Konfiguriere Authentifizierung...");
 
   const sessionSettings: session.SessionOptions = {
@@ -103,7 +103,7 @@ export function configureAuth(app: Express, storage: typeof storage) {
   passport.deserializeUser(async (id: number, done) => {
     try {
       console.log("deserializeUser aufgerufen mit ID:", id);
-      const user = await storage.getUserById(id);
+      const user = await storage.getUser(id);
       
       if (!user) {
         console.log("deserializeUser: Benutzer nicht gefunden für ID:", id);
