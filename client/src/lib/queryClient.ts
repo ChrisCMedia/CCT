@@ -63,19 +63,19 @@ export async function apiRequest(
   if (url === "/api/social-accounts") {
     console.log("NOTFALL-FIX: Social-Accounts-Anfrage abgefangen");
     
-    // Simuliere eine erfolgreiche Antwort mit Demo-Accounts
+    // Simuliere eine erfolgreiche Antwort mit den spezifischen Accounts
     const mockResponse = new Response(
       JSON.stringify([
         { 
           id: 1, 
           platform: "linkedin", 
-          accountName: "Demo LinkedIn Account",
+          accountName: "YOUR TIMES",
           userId: 1
         },
         { 
           id: 2, 
-          platform: "twitter", 
-          accountName: "Demo Twitter Account",
+          platform: "linkedin", 
+          accountName: "Judith Lenz",
           userId: 1
         }
       ]),
