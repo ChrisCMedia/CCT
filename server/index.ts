@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
-// Auskommentieren des problematischen Imports
+// Auskommentieren der problematischen Imports
 // import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+// import { setupVite, serveStatic, log } from "./vite";
 import { setupLinkedInAuth } from "./linkedin";
 import cron from "node-cron";
 import { storage } from "./storage";
@@ -159,6 +159,11 @@ if (!process.env.VERCEL) {
   });
 }
 
+// Eigene Log-Funktion, da vite.log nicht verfügbar ist
+function log(message: string) {
+  console.log(`[Server] ${message}`);
+}
+
 (async () => {
   log("Starting server initialization...");
 
@@ -289,12 +294,25 @@ if (!process.env.VERCEL) {
       });
     });
 
-    if (app.get("env") === "development") {
-      log("Setting up Vite in development mode...");
-      await setupVite(app, server);
+    // Statische Dateien bereitstellen (vereinfachte Version ohne Vite)
+    if (process.env.NODE_ENV === 'production') {
+      // In Produktion: Serve static files aus dem dist-Verzeichnis
+      app.use(express.static(path.join(process.cwd(), 'dist', 'client')));
+      
+      // Alle anderen Anfragen an die SPA weiterleiten
+      app.get('*', (req, res) => {
+        // API-Anfragen nicht umleiten
+        if (req.path.startsWith('/api')) {
+          return res.status(404).json({ message: 'API endpoint not found' });
+        }
+        
+        // SPA index.html ausliefern für Client-Routen
+        res.sendFile(path.join(process.cwd(), 'dist', 'client', 'index.html'));
+      });
+      
+      log("Static file serving configured for production");
     } else {
-      log("Setting up static serving for production...");
-      serveStatic(app);
+      log("Static file serving skipped in development mode");
     }
 
     // Vercel verwendet PORT Umgebungsvariable oder 3000 als Standard
