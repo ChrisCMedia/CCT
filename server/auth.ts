@@ -141,21 +141,92 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", (req, res) => {
+  app.post("/api/login", async (req, res) => {
+    console.log("Login-Anfrage mit Benutzerdaten:", req.body.username);
+    
     try {
-      console.log("NOTFALL-LOGIN: Direkte Antwort ohne Session-Verwendung");
+      // Extrahiere Anmeldedaten aus dem Request
+      const { username, password } = req.body;
+      if (!username || !password) {
+        console.error("Fehlende Anmeldedaten");
+        return res.status(400).json({ message: "Benutzername und Passwort erforderlich" });
+      }
+
+      // Direkte DB-Abfrage statt Passport
+      console.log("Führe direkte DB-Abfrage für Benutzer aus:", username);
       
-      // Direkte Erfolgsantwort ohne Sessions oder Datenbank
-      return res.status(200).json({
-        id: 1,
-        username: "admin"
-      });
-    } catch (error: any) {
-      console.error("Kritischer Fehler im Notfall-Login:", error);
-      return res.status(200).json({ 
-        id: 999,
-        username: "emergency-admin",
-        error: error.message
+      try {
+        const { db } = await import('./db');
+        const { eq } = await import('drizzle-orm');
+        const { users } = await import('@shared/schema');
+        
+        // Direkter Debug der DB-Verbindung
+        try {
+          console.log("Teste DB-Verbindung direkt...");
+          const testQuery = await db.select().from(users).limit(1);
+          console.log("DB-Test erfolgreich, gefundene Benutzer:", testQuery.length);
+        } catch (dbTestError) {
+          console.error("DB-Verbindungstest fehlgeschlagen:", dbTestError);
+          return res.status(500).json({ 
+            message: "Datenbankverbindungsfehler", 
+            details: dbTestError.message,
+            stack: dbTestError.stack
+          });
+        }
+        
+        // Benutzer in der Datenbank finden
+        console.log("Suche Benutzer in DB:", username);
+        const foundUsers = await db.select().from(users).where(eq(users.username, username));
+        console.log("Gefundene Benutzer:", foundUsers.length);
+        
+        if (foundUsers.length === 0) {
+          console.error("Benutzer nicht gefunden:", username);
+          return res.status(401).json({ message: "Ungültige Anmeldedaten" });
+        }
+        
+        const user = foundUsers[0];
+        console.log("Benutzer gefunden:", user.username, "Password-Hash:", user.password?.substring(0, 10) + "...");
+        
+        // Vergleiche Passwörter
+        const passwordMatches = await comparePasswords(password, user.password);
+        console.log("Passwortvergleich Ergebnis:", passwordMatches);
+        
+        if (!passwordMatches) {
+          console.error("Passwort stimmt nicht überein für Benutzer:", username);
+          return res.status(401).json({ message: "Ungültige Anmeldedaten" });
+        }
+        
+        // Erfolgreiche Anmeldung - sende Benutzerinfo zurück
+        const userResponse = {
+          id: user.id,
+          username: user.username
+        };
+        
+        // Setze den Benutzer in die Session
+        if (req.session) {
+          console.log("Setze Benutzer in Session:", userResponse.id);
+          req.session.user = userResponse;
+        } else {
+          console.warn("Session-Objekt existiert nicht!");
+        }
+        
+        console.log("Login erfolgreich für Benutzer:", username);
+        return res.json(userResponse);
+        
+      } catch (dbError) {
+        console.error("Datenbankfehler beim Login:", dbError);
+        return res.status(500).json({ 
+          message: "Datenbankfehler während der Anmeldung", 
+          details: dbError.message,
+          stack: dbError.stack
+        });
+      }
+    } catch (error) {
+      console.error("Unerwarteter Fehler beim Login:", error);
+      return res.status(500).json({ 
+        message: "Anmeldefehler", 
+        details: error.message,
+        stack: error.stack
       });
     }
   });

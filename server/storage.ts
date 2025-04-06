@@ -9,13 +9,13 @@ import { pool } from "./db";
 // Session-Store Konfiguration
 let sessionStore: session.Store;
 
-// Vereinfachter Ansatz: Immer MemoryStore verwenden, um PostgreSQL-Probleme zu umgehen
+// Verwende immer MemoryStore für Debugging
 console.log("Verwende Memory Session-Store für Debugging");
 const MemoryStore = memorystore(session);
 sessionStore = new MemoryStore({
   checkPeriod: 86400000 // Bereinige abgelaufene Einträge alle 24h
 });
-console.log("Memory Session-Store wurde erfolgreich initialisiert");
+console.log("Memory Session-Store initialisiert");
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
