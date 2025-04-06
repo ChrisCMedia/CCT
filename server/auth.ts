@@ -173,73 +173,117 @@ export function setupAuth(app: Express) {
       console.log("Führe direkte DB-Abfrage für Benutzer aus:", username);
       
       try {
-        const { db } = await import('./db');
-        const { eq } = await import('drizzle-orm');
-        const { users } = await import('@shared/schema');
+        const { pool, db } = await import('./db');
         
-        // Direkter Debug der DB-Verbindung
-        try {
-          console.log("Teste DB-Verbindung direkt...");
-          const testQuery = await db.select().from(users).limit(1);
-          console.log("DB-Test erfolgreich, gefundene Benutzer:", testQuery.length);
-        } catch (dbTestError) {
-          console.error("DB-Verbindungstest fehlgeschlagen:", dbTestError);
-          return res.status(500).json({ 
-            message: "Datenbankverbindungsfehler", 
-            details: dbTestError.message,
-            stack: dbTestError.stack
-          });
+        // Direkter Pool-Zugriff falls verfügbar
+        if (pool) {
+          try {
+            console.log("Verwende direkten Pool-Zugriff...");
+            const result = await pool.query(
+              'SELECT * FROM users WHERE username = $1 LIMIT 1', 
+              [username]
+            );
+            
+            console.log(`Benutzerabfrage über Pool-Zugriff: ${result.rows.length} Ergebnisse gefunden`);
+            
+            if (result.rows.length === 0) {
+              console.error("Benutzer nicht gefunden:", username);
+              return res.status(401).json({ message: "Ungültige Anmeldedaten" });
+            }
+            
+            const user = result.rows[0];
+            console.log("Benutzer gefunden:", user.username, "Password-Hash:", user.password?.substring(0, 10) + "...");
+            
+            // Vergleiche Passwörter
+            const passwordMatches = await comparePasswords(password, user.password);
+            console.log("Passwortvergleich Ergebnis:", passwordMatches);
+            
+            if (!passwordMatches) {
+              console.error("Passwort stimmt nicht überein für Benutzer:", username);
+              return res.status(401).json({ message: "Ungültige Anmeldedaten" });
+            }
+            
+            // Erfolgreiche Anmeldung - sende Benutzerinfo zurück
+            const userResponse = {
+              id: user.id,
+              username: user.username
+            };
+            
+            // Setze den Benutzer in die Session
+            if (req.session) {
+              console.log("Setze Benutzer in Session:", userResponse.id);
+              req.session.user = userResponse;
+            } else {
+              console.warn("Session-Objekt existiert nicht!");
+            }
+            
+            console.log("Login erfolgreich für Benutzer:", username);
+            return res.json(userResponse);
+          } catch (poolError: any) {
+            console.error("Fehler bei direktem Pool-Zugriff:", poolError.message);
+            console.error("Stack:", poolError.stack);
+          }
         }
         
-        // Benutzer in der Datenbank finden
-        console.log("Suche Benutzer in DB:", username);
-        const foundUsers = await db.select().from(users).where(eq(users.username, username));
-        console.log("Gefundene Benutzer:", foundUsers.length);
-        
-        if (foundUsers.length === 0) {
-          console.error("Benutzer nicht gefunden:", username);
-          return res.status(401).json({ message: "Ungültige Anmeldedaten" });
+        // Fallback zu ORM wenn Pool nicht verfügbar oder fehlgeschlagen
+        if (db) {
+          const { eq } = await import('drizzle-orm');
+          const { users } = await import('@shared/schema');
+          
+          console.log("Fallback zu ORM für Benutzerabfrage...");
+          const foundUsers = await db.select().from(users).where(eq(users.username, username));
+          
+          if (foundUsers.length === 0) {
+            console.error("Benutzer nicht gefunden:", username);
+            return res.status(401).json({ message: "Ungültige Anmeldedaten" });
+          }
+          
+          const user = foundUsers[0];
+          console.log("Benutzer gefunden:", user.username, "Password-Hash:", user.password?.substring(0, 10) + "...");
+          
+          // Vergleiche Passwörter
+          const passwordMatches = await comparePasswords(password, user.password);
+          console.log("Passwortvergleich Ergebnis:", passwordMatches);
+          
+          if (!passwordMatches) {
+            console.error("Passwort stimmt nicht überein für Benutzer:", username);
+            return res.status(401).json({ message: "Ungültige Anmeldedaten" });
+          }
+          
+          // Erfolgreiche Anmeldung - sende Benutzerinfo zurück
+          const userResponse = {
+            id: user.id,
+            username: user.username
+          };
+          
+          // Setze den Benutzer in die Session
+          if (req.session) {
+            console.log("Setze Benutzer in Session:", userResponse.id);
+            req.session.user = userResponse;
+          } else {
+            console.warn("Session-Objekt existiert nicht!");
+          }
+          
+          console.log("Login erfolgreich für Benutzer:", username);
+          return res.json(userResponse);
         }
         
-        const user = foundUsers[0];
-        console.log("Benutzer gefunden:", user.username, "Password-Hash:", user.password?.substring(0, 10) + "...");
+        // Weder Pool noch DB verfügbar
+        console.error("Weder Pool noch ORM verfügbar für Login!");
+        return res.status(500).json({ message: "Interner Serverfehler - Datenbankverbindung nicht verfügbar" });
         
-        // Vergleiche Passwörter
-        const passwordMatches = await comparePasswords(password, user.password);
-        console.log("Passwortvergleich Ergebnis:", passwordMatches);
-        
-        if (!passwordMatches) {
-          console.error("Passwort stimmt nicht überein für Benutzer:", username);
-          return res.status(401).json({ message: "Ungültige Anmeldedaten" });
-        }
-        
-        // Erfolgreiche Anmeldung - sende Benutzerinfo zurück
-        const userResponse = {
-          id: user.id,
-          username: user.username
-        };
-        
-        // Setze den Benutzer in die Session
-        if (req.session) {
-          console.log("Setze Benutzer in Session:", userResponse.id);
-          req.session.user = userResponse;
-        } else {
-          console.warn("Session-Objekt existiert nicht!");
-        }
-        
-        console.log("Login erfolgreich für Benutzer:", username);
-        return res.json(userResponse);
-        
-      } catch (dbError) {
-        console.error("Datenbankfehler beim Login:", dbError);
+      } catch (dbError: any) {
+        console.error("Datenbankfehler beim Login:", dbError.message);
+        console.error("Stack:", dbError.stack);
         return res.status(500).json({ 
           message: "Datenbankfehler während der Anmeldung", 
           details: dbError.message,
           stack: dbError.stack
         });
       }
-    } catch (error) {
-      console.error("Unerwarteter Fehler beim Login:", error);
+    } catch (error: any) {
+      console.error("Unerwarteter Fehler beim Login:", error.message);
+      console.error("Stack:", error.stack);
       return res.status(500).json({ 
         message: "Anmeldefehler", 
         details: error.message,

@@ -48,6 +48,40 @@ console.log("Setze erweiterte Verbindungskonfiguration...");
 (neonConfig as any).retryLimit = 5;
 console.log("Verbindungs-Timeout:", (neonConfig as any).connectTimeout, "ms");
 
+// Exportierte Funktionen für direkten Zugriff ohne Pool
+export async function executeDirectQuery(query: string, params?: any[]): Promise<any> {
+  try {
+    if (pool) {
+      console.log("Führe direkte Query aus:", query.substring(0, 80) + "...", "Params:", params);
+      const result = await pool.query(query, params);
+      console.log("Query erfolgreich ausgeführt, Zeilen:", result.rowCount);
+      return result;
+    } else {
+      console.error("FEHLER: Kein DB-Pool verfügbar");
+      throw new Error("Kein DB-Pool verfügbar");
+    }
+  } catch (error: any) {
+    console.error("FEHLER bei direkter Query:", error.message);
+    console.error("Stack:", error.stack);
+    throw error;
+  }
+}
+
+// SQL für direktes Testen
+export async function testDB(): Promise<boolean> {
+  try {
+    if (pool) {
+      const result = await executeDirectQuery("SELECT 1 as test");
+      console.log("Datenbank Test erfolgreich:", result.rows[0]);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Datenbank Test fehlgeschlagen:", error);
+    return false;
+  }
+}
+
 // SQLite für lokale Entwicklung verwenden, wenn keine DATABASE_URL gesetzt ist
 let db;
 let pool = null;
@@ -101,6 +135,47 @@ try {
       ]);
       
       console.log("PostgreSQL-Verbindung erfolgreich getestet:", JSON.stringify(testResult));
+      
+      // Erstelle Admin-Benutzer wenn noch nicht vorhanden
+      try {
+        console.log("Prüfe, ob Admin-Benutzer existiert...");
+        const adminCheck = await pool.query('SELECT * FROM users WHERE username = $1 LIMIT 1', ['admin']);
+        
+        if (adminCheck.rows.length === 0) {
+          console.log("Admin-Benutzer nicht gefunden, erstelle einen...");
+          
+          // Importiere hash-Funktion aus auth.ts
+          const { hashPassword } = await import('./auth');
+          const hashedPassword = await hashPassword('admin123');
+          
+          await pool.query(
+            'INSERT INTO users (username, password) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            ['admin', hashedPassword]
+          );
+          
+          console.log("Admin-Benutzer erfolgreich erstellt");
+        } else {
+          console.log("Admin-Benutzer existiert bereits");
+          
+          // Überprüfe, ob das Passwort gehashed ist
+          const user = adminCheck.rows[0];
+          if (!user.password.includes('.')) {
+            console.log("Admin-Passwort ist nicht gehashed, aktualisiere...");
+            
+            const { hashPassword } = await import('./auth');
+            const hashedPassword = await hashPassword('admin123');
+            
+            await pool.query(
+              'UPDATE users SET password = $1 WHERE username = $2',
+              [hashedPassword, 'admin']
+            );
+            
+            console.log("Admin-Passwort erfolgreich aktualisiert");
+          }
+        }
+      } catch (adminError: any) {
+        console.error("Fehler beim Prüfen oder Erstellen des Admin-Benutzers:", adminError.message);
+      }
     } catch (connError: any) {
       console.error("PostgreSQL-Verbindungstest fehlgeschlagen:");
       console.error("Fehlertyp:", typeof connError);
@@ -111,12 +186,22 @@ try {
         console.error("Fehlercode:", connError.code);
       }
       
-      // Versuche trotzdem die DB zu initialisieren
+      throw new Error(`Datenbankverbindungsfehler: ${connError.message}`);
     }
     
     console.log("Initialisiere Drizzle ORM mit Pool...");
     db = drizzle({ client: pool, schema });
     console.log("PostgreSQL-Verbindung vollständig initialisiert");
+    
+    // Direkte Testquery mit Drizzle
+    try {
+      console.log("Teste Drizzle ORM...");
+      const result = await db.select().from(schema.users).limit(1);
+      console.log("Drizzle ORM Test erfolgreich, Benutzer gefunden:", result.length > 0);
+    } catch (drizzleError: any) {
+      console.error("Drizzle ORM Test fehlgeschlagen:", drizzleError.message);
+      console.error("Stack:", drizzleError.stack);
+    }
   } else {
     console.log("Verwende SQLite für lokale Entwicklung");
     
