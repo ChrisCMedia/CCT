@@ -3,7 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 // Auskommentieren der problematischen Imports
 // import { registerRoutes } from "./routes";
 // import { setupVite, serveStatic, log } from "./vite";
-import { setupLinkedInAuth } from "./linkedin";
+// import { setupLinkedInAuth } from "./linkedin";
 import cron from "node-cron";
 import { storage } from "./storage";
 import { exec } from "child_process";
@@ -181,8 +181,6 @@ function log(message: string) {
         throw dbInitError; // In Entwicklung neu werfen
       }
     }
-
-    setupLinkedInAuth(app);
 
     // Auth-Konfiguration VOR den Routen
     log("Konfiguriere Authentifizierung...");
