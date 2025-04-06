@@ -1,11 +1,27 @@
-import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup } from "@shared/schema";
+import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup, postComments, PostComment, InsertPostComment } from "@shared/schema";
 import { db } from "./db";
 import { eq, asc, isNotNull, isNull, desc } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
+import memorystore from 'memorystore';
 import { pool } from "./db";
 
-const PostgresSessionStore = connectPg(session);
+// Wähle den passenden Session-Store basierend auf der Datenbankverbindung
+let sessionStore: session.Store;
+if (pool) {
+  const PostgresSessionStore = connectPg(session);
+  sessionStore = new PostgresSessionStore({
+    pool,
+    tableName: "user_sessions",
+    createTableIfMissing: true,
+  });
+} else {
+  // Fallback auf Memory Store für SQLite oder andere Datenbanken ohne PostgreSQL
+  const MemoryStore = memorystore(session);
+  sessionStore = new MemoryStore({
+    checkPeriod: 86400000 // Bereinige abgelaufene Einträge alle 24h
+  });
+}
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -45,6 +61,7 @@ export interface IStorage {
     visibility?: string;
     postType?: string;
     articleUrl?: string;
+    scheduledInLinkedIn?: boolean;
   }): Promise<Post>;
   approvePost(id: number): Promise<Post>;
   unapprovePost(id: number): Promise<Post>;
@@ -89,7 +106,6 @@ export interface IStorage {
     updatedAt: Date;
   }): Promise<void>;
 
-  sessionStore: session.Store;
   // Neue Subtask-Operationen
   createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask>;
   updateSubtask(id: number, completed: boolean): Promise<SubTask>;
@@ -100,17 +116,20 @@ export interface IStorage {
   updateBackupStatus(id: number, status: string, error?: string): Promise<Backup>;
   getBackups(): Promise<Backup[]>;
   getLatestBackup(): Promise<Backup | undefined>;
+
+  // Post comment operations
+  getPostComments(postId: number): Promise<(PostComment & { user: User })[]>;
+  createPostComment(comment: { content: string; postId: number; userId: number }): Promise<PostComment>;
+  deletePostComment(id: number): Promise<void>;
+
+  sessionStore: session.Store;
 }
 
 export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({
-      pool,
-      tableName: "user_sessions",
-      createTableIfMissing: true,
-    });
+    this.sessionStore = sessionStore;
   }
 
   async getUsers(): Promise<User[]> {
@@ -221,6 +240,18 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getPost(id: number): Promise<Post | undefined> {
+    const [post] = await db.select().from(posts).where(eq(posts.id, id));
+    
+    if (post) {
+      // Lade Kommentare für diesen Post
+      const comments = await this.getPostComments(post.id);
+      return { ...post, comments };
+    }
+    
+    return post;
+  }
+
   async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
     const [newPost] = await db.insert(posts).values({
       ...post,
@@ -240,6 +271,7 @@ export class DatabaseStorage implements IStorage {
     visibility?: string;
     postType?: string;
     articleUrl?: string;
+    scheduledInLinkedIn?: boolean;
   }): Promise<Post> {
     const [post] = await db
       .update(posts)
@@ -255,6 +287,7 @@ export class DatabaseStorage implements IStorage {
         visibility: data.visibility,
         postType: data.postType,
         articleUrl: data.articleUrl,
+        scheduledInLinkedIn: data.scheduledInLinkedIn,
       })
       .where(eq(posts.id, id))
       .returning();
@@ -411,14 +444,6 @@ export class DatabaseStorage implements IStorage {
       });
   }
 
-  async getPost(id: number): Promise<Post | undefined> {
-    const [post] = await db
-      .select()
-      .from(posts)
-      .where(eq(posts.id, id));
-    return post;
-  }
-
   async createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask> {
     const [newSubtask] = await db.insert(subtasks).values(subtask).returning();
     return newSubtask;
@@ -470,6 +495,39 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(backups.createdAt))
       .limit(1);
     return backup;
+  }
+
+  // Implementierung der Kommentar-Funktionen
+  async getPostComments(postId: number): Promise<(PostComment & { user: User })[]> {
+    const result = await db
+      .select({
+        comment: postComments,
+        user: {
+          id: users.id,
+          username: users.username
+        }
+      })
+      .from(postComments)
+      .innerJoin(users, eq(postComments.userId, users.id))
+      .where(eq(postComments.postId, postId))
+      .orderBy(asc(postComments.createdAt));
+
+    return result.map(({ comment, user }) => ({
+      ...comment,
+      user
+    }));
+  }
+
+  async createPostComment(comment: { content: string; postId: number; userId: number }): Promise<PostComment> {
+    const [newComment] = await db
+      .insert(postComments)
+      .values(comment)
+      .returning();
+    return newComment;
+  }
+
+  async deletePostComment(id: number): Promise<void> {
+    await db.delete(postComments).where(eq(postComments.id, id));
   }
 }
 

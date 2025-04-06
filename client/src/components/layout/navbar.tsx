@@ -6,7 +6,8 @@ import {
   CheckSquare, 
   Mail, 
   Home,
-  LogOut 
+  LogOut,
+  History
 } from "lucide-react";
 
 export default function Navbar() {
@@ -40,6 +41,12 @@ export default function Navbar() {
                 <a className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-primary">
                   <CalendarDays size={18} />
                   Posts
+                </a>
+              </Link>
+              <Link href="/past-posts">
+                <a className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-primary">
+                  <History size={18} />
+                  Vergangene Posts
                 </a>
               </Link>
               <Link href="/newsletter">

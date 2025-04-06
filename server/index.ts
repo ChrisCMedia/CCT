@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -86,10 +87,13 @@ async function createBackup() {
 }
 
 // Plane wöchentliches Backup (jeden Sonntag um 3 Uhr morgens)
-cron.schedule('0 3 * * 0', () => {
-  log('Starte automatisches wöchentliches Backup...');
-  createBackup();
-});
+// Nur ausführen, wenn nicht auf Vercel
+if (!process.env.VERCEL) {
+  cron.schedule('0 3 * * 0', () => {
+    log('Starte automatisches wöchentliches Backup...');
+    createBackup();
+  });
+}
 
 (async () => {
   log("Starting server initialization...");
@@ -114,14 +118,20 @@ cron.schedule('0 3 * * 0', () => {
       serveStatic(app);
     }
 
-    const PORT = 5000;
+    // Vercel verwendet PORT Umgebungsvariable oder 3000 als Standard
+    const PORT = process.env.PORT || 5001;
     server.listen(PORT, "0.0.0.0", () => {
       log(`Server successfully started and listening on port ${PORT}`);
     });
 
-    // Erstelle ein initiales Backup beim Serverstart
-    log("Erstelle initiales Backup...");
-    await createBackup();
+    // Nur in Produktionsumgebung Backup erstellen
+    // Überspringen auf Vercel wegen Serverless-Architektur
+    if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
+      log("Erstelle initiales Backup...");
+      await createBackup();
+    } else {
+      log("Überspringe Backup in Entwicklungsumgebung oder auf Vercel");
+    }
   } catch (error) {
     log(`Failed to start server: ${error}`);
     process.exit(1);

@@ -91,6 +91,7 @@ export const posts = pgTable("posts", {
   publishStatus: text("publish_status").default("draft"),
   failureReason: text("failure_reason"),
   deletedAt: timestamp("deleted_at"),
+  scheduledInLinkedIn: boolean("scheduled_in_linkedin").default(false),
 });
 
 export const postAccounts = pgTable("post_accounts", {
@@ -112,6 +113,25 @@ export const postAnalytics = pgTable("post_analytics", {
   updatedAt: timestamp("updated_at").notNull(),
 });
 
+export const postComments = pgTable("post_comments", {
+  id: serial("id").primaryKey(),
+  content: text("content").notNull(),
+  postId: integer("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const postCommentsRelations = relations(postComments, ({ one }) => ({
+  post: one(posts, {
+    fields: [postComments.postId],
+    references: [posts.id],
+  }),
+  user: one(users, {
+    fields: [postComments.userId],
+    references: [users.id],
+  }),
+}));
+
 export const postsRelations = relations(posts, ({ one, many }) => ({
   user: one(users, {
     fields: [posts.userId],
@@ -129,6 +149,7 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     fields: [posts.id],
     references: [postAnalytics.postId],
   }),
+  comments: many(postComments),
 }));
 
 export const postAnalyticsRelations = relations(postAnalytics, ({ one }) => ({
@@ -204,6 +225,11 @@ export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
   content: true,
 });
 
+export const insertPostCommentSchema = createInsertSchema(postComments).pick({
+  content: true,
+  postId: true,
+});
+
 export const backups = pgTable("backups", {
   id: serial("id").primaryKey(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -229,6 +255,7 @@ export type Post = typeof posts.$inferSelect & {
   account?: SocialAccount;
   lastEditedBy?: User;
   analytics?: PostAnalytics;
+  comments?: PostComment[];
 };
 export type Newsletter = typeof newsletters.$inferSelect;
 export type SocialAccount = typeof socialAccounts.$inferSelect;
@@ -238,3 +265,7 @@ export type PostAnalytics = typeof postAnalytics.$inferSelect;
 export type SubTask = typeof subtasks.$inferSelect;
 export type Backup = typeof backups.$inferSelect;
 export type InsertBackup = z.infer<typeof insertBackupSchema>;
+export type PostComment = typeof postComments.$inferSelect & {
+  user?: User;
+};
+export type InsertPostComment = z.infer<typeof insertPostCommentSchema>;

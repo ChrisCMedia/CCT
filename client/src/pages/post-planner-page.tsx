@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Post, SocialAccount, User } from "@shared/schema";
+import { Post, SocialAccount, User, PostComment } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import Navbar from "@/components/layout/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Image, Linkedin, Pencil } from "lucide-react";
+import { Image, Linkedin, Pencil, MessageCircle, Send } from "lucide-react";
 import { formatDistance } from "date-fns";
 import { de } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in Bytes
 
@@ -67,6 +70,8 @@ export default function PostPlannerPage() {
   const { toast } = useToast();
   const [showDeletedPosts, setShowDeletedPosts] = useState(false);
   const [postToDelete, setPostToDelete] = useState<Post | null>(null);
+  const [viewingComments, setViewingComments] = useState<number | null>(null);
+  const [newComment, setNewComment] = useState("");
 
   const { data: posts } = useQuery<(Post & { account: SocialAccount; lastEditedBy?: User })[]>({
     queryKey: ["/api/posts"],
@@ -75,6 +80,10 @@ export default function PostPlannerPage() {
   const { data: deletedPosts } = useQuery<(Post & { account: SocialAccount; lastEditedBy?: User })[]>({
     queryKey: ["/api/posts/deleted"],
     enabled: showDeletedPosts,
+  });
+  const { data: comments, refetch: refetchComments } = useQuery<(PostComment & { user: User })[]>({
+    queryKey: [`/api/posts/${viewingComments}/comments`],
+    enabled: viewingComments !== null,
   });
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>, isEditing = false) => {
@@ -159,6 +168,7 @@ export default function PostPlannerPage() {
       if (updates.articleUrl) {
         formData.append("articleUrl", updates.articleUrl);
       }
+      formData.append("scheduledInLinkedIn", updates.scheduledInLinkedIn ? 'true' : 'false');
 
       const res = await fetch(`/api/posts/${id}`, {
         method: "PATCH",
@@ -240,6 +250,34 @@ export default function PostPlannerPage() {
       toast({
         title: "Post wiederhergestellt",
         description: "Der Post wurde erfolgreich wiederhergestellt",
+      });
+    },
+  });
+
+  const createCommentMutation = useMutation({
+    mutationFn: async ({ content, postId }: { content: string; postId: number }) => {
+      const res = await apiRequest("POST", `/api/posts/${postId}/comments`, { content });
+      return res.json();
+    },
+    onSuccess: () => {
+      setNewComment("");
+      refetchComments();
+      toast({
+        title: "Kommentar erstellt",
+        description: "Ihr Kommentar wurde erfolgreich hinzugefügt",
+      });
+    },
+  });
+
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (commentId: number) => {
+      await apiRequest("DELETE", `/api/comments/${commentId}`);
+    },
+    onSuccess: () => {
+      refetchComments();
+      toast({
+        title: "Kommentar gelöscht",
+        description: "Der Kommentar wurde erfolgreich gelöscht",
       });
     },
   });
@@ -349,9 +387,16 @@ export default function PostPlannerPage() {
                       <Badge variant="outline" className="mb-2">
                         {post.account?.accountName}
                       </Badge>
-                      <Button size="icon" variant="ghost" onClick={() => setEditingPost(post)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {post.scheduledInLinkedIn && (
+                          <Badge variant="secondary" className="bg-green-100">
+                            ✓ Geplant
+                          </Badge>
+                        )}
+                        <Button size="icon" variant="ghost" onClick={() => setEditingPost(post)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                     <p className="text-sm text-gray-600 whitespace-pre-wrap">{post.content}</p>
                     {post.imageUrl && (
@@ -395,6 +440,14 @@ export default function PostPlannerPage() {
                           Genehmigen
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setViewingComments(post.id)}
+                      >
+                        <MessageCircle className="h-4 w-4 mr-2" />
+                        Kommentare
+                      </Button>
                       <AlertDialog open={!!postToDelete} onOpenChange={(open) => !open && setPostToDelete(null)}>
                         <Button
                           size="sm"
@@ -559,6 +612,22 @@ export default function PostPlannerPage() {
                   </Select>
                 </div>
 
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="scheduled-in-linkedin"
+                    checked={editingPost.scheduledInLinkedIn || false}
+                    onCheckedChange={(checked) => 
+                      setEditingPost({ ...editingPost, scheduledInLinkedIn: !!checked })
+                    }
+                  />
+                  <label
+                    htmlFor="scheduled-in-linkedin"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    In LinkedIn geplant
+                  </label>
+                </div>
+
                 {editingPost.postType === "article" && (
                   <div className="space-y-2">
                     <Label>Artikel-URL</Label>
@@ -592,6 +661,7 @@ export default function PostPlannerPage() {
                         visibility: editingPost.visibility,
                         postType: editingPost.postType,
                         articleUrl: editingPost.articleUrl,
+                        scheduledInLinkedIn: editingPost.scheduledInLinkedIn,
                       },
                     });
                   }
@@ -599,6 +669,75 @@ export default function PostPlannerPage() {
                 disabled={updatePostMutation.isPending}
               >
                 Speichern
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={viewingComments !== null} onOpenChange={(open) => !open && setViewingComments(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Kommentare</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="max-h-[50vh] overflow-y-auto space-y-4 pr-2">
+              {comments && comments.length > 0 ? (
+                comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-3">
+                    <Avatar>
+                      <AvatarFallback>
+                        {comment.user.username.substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-sm">{comment.user.username}</p>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => deleteCommentMutation.mutate(comment.id)}
+                          className="h-7 px-2"
+                        >
+                          ×
+                        </Button>
+                      </div>
+                      <p className="text-sm text-gray-600">{comment.content}</p>
+                      <p className="text-xs text-gray-400">
+                        {format(new Date(comment.createdAt), "PPp")}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 py-4">
+                  Noch keine Kommentare vorhanden
+                </p>
+              )}
+            </div>
+            
+            <Separator />
+            
+            <div className="flex gap-2">
+              <Textarea
+                placeholder="Schreiben Sie einen Kommentar..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                className="flex-1"
+              />
+              <Button 
+                className="self-end"
+                disabled={!newComment.trim() || createCommentMutation.isPending}
+                onClick={() => {
+                  if (viewingComments && newComment.trim()) {
+                    createCommentMutation.mutate({
+                      content: newComment,
+                      postId: viewingComments
+                    });
+                  }
+                }}
+              >
+                <Send className="h-4 w-4" />
               </Button>
             </div>
           </div>

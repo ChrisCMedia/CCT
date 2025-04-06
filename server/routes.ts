@@ -11,8 +11,28 @@ import fs from "fs";
 
 const execAsync = promisify(exec);
 
+// Überprüfe, ob das Uploads-Verzeichnis existiert, wenn nicht, erstelle es
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Konfiguriere Multer für die Speicherung von Dateien
+const storage_config = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    // Verwende den ursprünglichen Dateinamen, ergänzt um einen Zeitstempel
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const fileExtension = path.extname(file.originalname);
+    const fileName = path.basename(file.originalname, fileExtension) + '-' + uniqueSuffix + fileExtension;
+    cb(null, fileName);
+  }
+});
+
 const upload = multer({
-  dest: "uploads/",
+  storage: storage_config,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB
   },
@@ -29,8 +49,13 @@ const upload = multer({
 export function registerRoutes(app: express.Application): Server {
   setupAuth(app);
 
-  // Serve uploaded files
-  app.use("/uploads", express.static("uploads"));
+  // Serve uploaded files mit CORS und Cache-Control
+  app.use("/uploads", express.static("uploads", {
+    maxAge: '1d', // Cache für einen Tag
+    setHeaders: (res, path) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+  }));
 
   // Get all users for assignment
   app.get("/api/users", async (req, res) => {
@@ -205,6 +230,9 @@ export function registerRoutes(app: express.Application): Server {
         }
       }
 
+      // Parse boolean value from string
+      const scheduledInLinkedIn = req.body.scheduledInLinkedIn === 'true';
+
       const post = await storage.updatePost(Number(req.params.id), {
         content: req.body.content,
         userId: req.user.id,
@@ -214,6 +242,7 @@ export function registerRoutes(app: express.Application): Server {
         visibility: req.body.visibility,
         postType: req.body.postType,
         articleUrl: req.body.articleUrl,
+        scheduledInLinkedIn,
       });
       res.json(post);
     } catch (error) {
@@ -252,6 +281,44 @@ export function registerRoutes(app: express.Application): Server {
     } catch (error) {
       console.error("Error deleting post:", error);
       res.status(500).json({ message: "Failed to delete post" });
+    }
+  });
+
+  // Post Kommentar Routen
+  app.get("/api/posts/:id/comments", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const comments = await storage.getPostComments(Number(req.params.id));
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching post comments:", error);
+      res.status(500).json({ message: "Failed to fetch post comments" });
+    }
+  });
+  
+  app.post("/api/posts/:id/comments", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const comment = await storage.createPostComment({
+        content: req.body.content,
+        postId: Number(req.params.id),
+        userId: req.user.id,
+      });
+      res.json(comment);
+    } catch (error) {
+      console.error("Error creating post comment:", error);
+      res.status(500).json({ message: "Failed to create post comment" });
+    }
+  });
+  
+  app.delete("/api/comments/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      await storage.deletePostComment(Number(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting post comment:", error);
+      res.status(500).json({ message: "Failed to delete post comment" });
     }
   });
 

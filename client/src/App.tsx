@@ -8,6 +8,7 @@ import AuthPage from "@/pages/auth-page";
 import HomePage from "@/pages/home-page";
 import TodoPage from "@/pages/todo-page";
 import PostPlannerPage from "@/pages/post-planner-page";
+import PastPostsPage from "@/pages/past-posts-page";
 import NewsletterPage from "@/pages/newsletter-page";
 import { ProtectedRoute } from "./lib/protected-route";
 
@@ -18,6 +19,7 @@ function Router() {
       <ProtectedRoute path="/" component={HomePage} />
       <ProtectedRoute path="/todos" component={TodoPage} />
       <ProtectedRoute path="/posts" component={PostPlannerPage} />
+      <ProtectedRoute path="/past-posts" component={PastPostsPage} />
       <ProtectedRoute path="/newsletter" component={NewsletterPage} />
       <Route component={NotFound} />
     </Switch>

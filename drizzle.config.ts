@@ -1,14 +1,20 @@
 import { defineConfig } from "drizzle-kit";
+import { existsSync } from 'fs';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
-}
+// Bestimme Datenbank-URL basierend auf Umgebungsvariable
+const dbUrl = process.env.DATABASE_URL || 'sqlite:./local_dev.db';
+const isSQLite = dbUrl.startsWith('sqlite:');
 
+// Konfiguration für SQLite oder PostgreSQL
 export default defineConfig({
-  out: "./migrations",
   schema: "./shared/schema.ts",
-  dialect: "postgresql",
-  dbCredentials: {
-    url: process.env.DATABASE_URL,
-  },
+  out: "./drizzle",
+  dialect: isSQLite ? 'sqlite' : 'postgresql',
+  dbCredentials: isSQLite
+    ? {
+        url: dbUrl.replace('sqlite:', ''),
+      }
+    : {
+        connectionString: dbUrl,
+      },
 });
