@@ -50,7 +50,8 @@ export function setupAuth(app: Express, instanceStorage = storage) {
     secret: process.env.SESSION_SECRET || 'entwicklungsgeheimnis123',
     resave: false,
     saveUninitialized: false,
-    store: instanceStorage.sessionStore,
+    // !! DIAGNOSE: Temporär auf MemoryStore umgestellt
+    store: new session.MemoryStore(), 
     cookie: {
       secure: app.get("env") === "production" ? true : false,
       httpOnly: true,
