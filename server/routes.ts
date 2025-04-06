@@ -185,26 +185,30 @@ export function registerRoutes(app: express.Application): Server {
   app.post("/api/posts", upload.single("image"), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      let imageUrl;
+      console.log("Post-Erstellungsanfrage erhalten:", req.body);
+      
+      let imageUrl = null;
       if (req.file) {
-        // Erstelle einen absoluten Pfad für das Bild
         imageUrl = `/uploads/${req.file.filename}`;
+        console.log("Bild hochgeladen:", imageUrl);
       }
 
-      // Stelle sicher, dass accountIds als Array existiert
-      let accountId;
+      // Extrahiere accountId aus der Anfrage
+      let accountId = null;
       if (req.body.accountIds) {
-        // Wenn es ein Array ist, nehme das erste Element
         if (Array.isArray(req.body.accountIds)) {
           accountId = Number(req.body.accountIds[0]);
+          console.log("AccountId aus Array:", accountId);
         } else if (typeof req.body.accountIds === 'string') {
           // Wenn es ein String ist, versuche zu parsen (könnte ein JSON-Array sein)
           try {
             const accountIdsArray = JSON.parse(req.body.accountIds);
             accountId = Number(accountIdsArray[0]);
+            console.log("AccountId aus JSON-String:", accountId);
           } catch (e) {
             // Falls es ein einzelner String ist, versuche ihn direkt zu konvertieren
             accountId = Number(req.body.accountIds);
+            console.log("AccountId aus einfachem String:", accountId);
           }
         }
       }
@@ -212,26 +216,42 @@ export function registerRoutes(app: express.Application): Server {
       // Fallback auf accountId Feld, falls vorhanden
       if (!accountId && req.body.accountId) {
         accountId = Number(req.body.accountId);
+        console.log("AccountId aus direktem Feld:", accountId);
       }
 
       // Falls keine accountId gefunden wurde, verwende Standard-Account 1
       if (!accountId) {
         accountId = 1; // Standard-Account (LinkedIn Demo Account)
+        console.log("Verwende Standard-AccountId:", accountId);
+      }
+
+      // Validiere das Datum
+      let scheduledDate;
+      try {
+        scheduledDate = new Date(req.body.scheduledDate);
+        if (isNaN(scheduledDate.getTime())) {
+          throw new Error("Ungültiges Datum");
+        }
+      } catch (error) {
+        console.error("Fehler beim Parsen des Datums:", error, req.body.scheduledDate);
+        return res.status(400).json({ message: "Ungültiges Datum" });
       }
 
       const postData = {
         content: req.body.content,
-        scheduledDate: new Date(req.body.scheduledDate),
+        scheduledDate: scheduledDate,
         accountId: accountId,
         imageUrl,
         userId: req.user.id,
       };
 
+      console.log("Erstelle Post mit Daten:", postData);
       const post = await storage.createPost(postData);
+      console.log("Post erfolgreich erstellt:", post.id);
       res.json(post);
     } catch (error) {
-      console.error("Error creating post:", error);
-      res.status(500).json({ message: "Failed to create post" });
+      console.error("Fehler beim Erstellen des Posts:", error);
+      res.status(500).json({ message: "Failed to create post", error: error.message });
     }
   });
 

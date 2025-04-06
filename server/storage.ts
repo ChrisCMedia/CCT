@@ -222,53 +222,72 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]> {
-    const result = await db
-      .select({
-        post: posts,
-        account: socialAccounts,
-        lastEditedBy: users,
-      })
-      .from(posts)
-      .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
-      .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
-      .where(isNull(posts.deletedAt))
-      .orderBy(desc(posts.scheduledDate));
+    try {
+      console.log("Rufe Posts aus der Datenbank ab...");
+      const result = await db
+        .select({
+          post: posts,
+          account: socialAccounts,
+          lastEditedBy: users,
+        })
+        .from(posts)
+        .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
+        .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
+        .where(isNull(posts.deletedAt))
+        .orderBy(desc(posts.scheduledDate));
 
-    // Falls keine Posts existieren, erstelle einen Beispiel-Post
-    if (result.length === 0) {
-      try {
-        // Überprüfe, ob wir einen Benutzer und ein Konto haben
-        const [account] = await db.select().from(socialAccounts).limit(1);
-        const [user] = await db.select().from(users).limit(1);
-        
-        if (account && user) {
-          // Erstelle einen Beispiel-Post
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
+      console.log(`${result.length} Posts gefunden`);
+
+      // Falls keine Posts existieren, erstelle einen Beispiel-Post
+      if (result.length === 0) {
+        try {
+          console.log("Keine Posts gefunden, versuche Beispiel-Post zu erstellen");
+          // Überprüfe, ob wir einen Benutzer und ein Konto haben
+          const [account] = await db.select().from(socialAccounts).limit(1);
+          const [user] = await db.select().from(users).limit(1);
           
-          const examplePost = {
-            content: "Dies ist ein Beispiel-Post, um zu zeigen, wie Posts funktionieren.",
-            scheduledDate: tomorrow,
-            userId: user.id,
-            accountId: account.id,
-            imageUrl: null
-          };
-          
-          await this.createPost(examplePost);
-          
-          // Hole die aktualisierten Posts
-          return this.getPosts();
+          if (account && user) {
+            console.log(`Erstelle Beispiel-Post mit Benutzer ${user.id} und Account ${account.id}`);
+            // Erstelle einen Beispiel-Post
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const examplePost = {
+              content: "Dies ist ein Beispiel-Post, um zu zeigen, wie Posts funktionieren.",
+              scheduledDate: tomorrow,
+              userId: user.id,
+              accountId: account.id,
+              imageUrl: null
+            };
+            
+            await this.createPost(examplePost);
+            console.log("Beispiel-Post erfolgreich erstellt");
+            
+            // Hole die aktualisierten Posts
+            return this.getPosts();
+          } else {
+            console.log("Kein Benutzer oder Account gefunden für Beispiel-Post");
+          }
+        } catch (error) {
+          console.error("Fehler beim Erstellen des Beispiel-Posts:", error);
         }
-      } catch (error) {
-        console.error("Fehler beim Erstellen des Beispiel-Posts:", error);
       }
-    }
 
-    return result.map(({ post, account, lastEditedBy }) => ({
-      ...post,
-      account,
-      lastEditedBy: lastEditedBy || undefined,
-    }));
+      // Stelle sicher, dass für jeden Post ein Account vorhanden ist
+      const validPosts = result.filter(item => item.account !== null);
+      if (validPosts.length < result.length) {
+        console.warn(`${result.length - validPosts.length} Posts haben keinen gültigen Account und werden ausgelassen`);
+      }
+
+      return validPosts.map(({ post, account, lastEditedBy }) => ({
+        ...post,
+        account,
+        lastEditedBy: lastEditedBy || undefined,
+      }));
+    } catch (error) {
+      console.error("Fehler beim Abrufen der Posts:", error);
+      return [];
+    }
   }
 
   async getPost(id: number): Promise<Post | undefined> {
