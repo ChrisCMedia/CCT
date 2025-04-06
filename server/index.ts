@@ -2,8 +2,13 @@ import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
 import path from "path";
+import passport from "passport";
+import session from "express-session";
+import { initializeDatabase } from "./dbInit";
+import { setupAuth } from "./auth";
+import { storage } from "./storage";
 
-// Einfache Express-Anwendung ohne externe Abhängigkeiten
+// Express-Anwendung initialisieren
 const app = express();
 
 // CORS konfigurieren
@@ -17,43 +22,10 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Einfache Log-Funktion
+// Log-Funktion
 function log(message: string) {
   console.log(`[Server] ${message}`);
 }
-
-// Einfache API-Endpunkte
-app.get('/api/user', (req, res) => {
-  log('GET /api/user - Notfallmodus, gebe Admin-Benutzer zurück');
-  return res.json({ id: 1, username: 'admin' });
-});
-
-app.post('/api/login', (req, res) => {
-  log('POST /api/login - Notfallmodus, gebe Admin-Benutzer zurück');
-  return res.json({ id: 1, username: 'admin' });
-});
-
-app.get('/api/todos', (req, res) => {
-  log('GET /api/todos - Notfallmodus, gebe leere Liste zurück');
-  return res.json([]);
-});
-
-app.get('/api/social-accounts', (req, res) => {
-  log('GET /api/social-accounts - Notfallmodus, gebe Demo-Konten zurück');
-  return res.json([
-    { id: 1, name: "LinkedIn", userId: 1, url: "https://linkedin.com/in/example", username: "example_user" },
-    { id: 2, name: "LinkedIn", userId: 1, url: "https://linkedin.com/in/example2", username: "example_user2" }
-  ]);
-});
-
-app.get('/api/posts', (req, res) => {
-  log('GET /api/posts - Notfallmodus, gebe Demo-Posts zurück');
-  const now = new Date();
-  return res.json([
-    { id: 1, userId: 1, accountId: 1, content: "Demo Post 1", scheduledDate: now.toISOString(), status: "draft" },
-    { id: 2, userId: 1, accountId: 2, content: "Demo Post 2", scheduledDate: now.toISOString(), status: "scheduled" }
-  ]);
-});
 
 // Fehlerbehandlung
 app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
@@ -70,6 +42,55 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
 // Statische Dateien bereitstellen
 app.use(express.static(path.join(process.cwd(), 'dist', 'client')));
 
+// Authentifizierung einrichten
+setupAuth(app);
+
+// API-Routen registrieren
+// Todo-Routen
+app.get('/api/todos', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'Nicht angemeldet' });
+  }
+  
+  try {
+    const todos = await storage.getTodos();
+    return res.json(todos);
+  } catch (error) {
+    log(`Fehler beim Abrufen der Todos: ${error}`);
+    return res.status(500).json({ message: 'Fehler beim Abrufen der Todos' });
+  }
+});
+
+// Social-Accounts-Routen
+app.get('/api/social-accounts', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'Nicht angemeldet' });
+  }
+  
+  try {
+    const accounts = await storage.getSocialAccounts();
+    return res.json(accounts);
+  } catch (error) {
+    log(`Fehler beim Abrufen der Social-Accounts: ${error}`);
+    return res.status(500).json({ message: 'Fehler beim Abrufen der Social-Accounts' });
+  }
+});
+
+// Posts-Routen
+app.get('/api/posts', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'Nicht angemeldet' });
+  }
+  
+  try {
+    const posts = await storage.getPosts();
+    return res.json(posts);
+  } catch (error) {
+    log(`Fehler beim Abrufen der Posts: ${error}`);
+    return res.status(500).json({ message: 'Fehler beim Abrufen der Posts' });
+  }
+});
+
 // Alle anderen Anfragen an die SPA weiterleiten
 app.get('*', (req, res) => {
   // API-Anfragen nicht umleiten
@@ -81,12 +102,32 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'dist', 'client', 'index.html'));
 });
 
-// Server starten
-const PORT = parseInt(process.env.PORT || '5001', 10);
-const http = require('http');
-const server = http.createServer(app);
+// Datenbank initialisieren und Server starten
+async function startServer() {
+  try {
+    log('Initialisiere Datenbank...');
+    await initializeDatabase();
+    log('Datenbank erfolgreich initialisiert');
+    
+    // Server starten
+    const PORT = parseInt(process.env.PORT || '5001', 10);
+    const http = require('http');
+    const server = http.createServer(app);
+    
+    server.listen(PORT, "0.0.0.0", () => {
+      log(`Server erfolgreich gestartet auf Port ${PORT}`);
+      log(`Umgebung: ${process.env.NODE_ENV || 'development'}`);
+    });
+  } catch (error) {
+    log(`KRITISCHER FEHLER beim Serverstart: ${error}`);
+    console.error(error);
+    process.exit(1);
+  }
+}
 
-server.listen(PORT, "0.0.0.0", () => {
-  log(`Server erfolgreich gestartet auf Port ${PORT}`);
-  log(`Umgebung: ${process.env.NODE_ENV || 'development'}`);
+// Server starten
+startServer().catch(error => {
+  log(`KRITISCHER FEHLER: ${error}`);
+  console.error(error);
+  process.exit(1);
 });
