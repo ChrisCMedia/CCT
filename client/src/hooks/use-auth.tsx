@@ -40,10 +40,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Login-Versuch:", credentials.username);
       try {
         const res = await apiRequest("POST", "/api/login", credentials);
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.message || "Login fehlgeschlagen");
-        }
         const userData = await res.json();
         console.log("Login erfolgreich:", userData);
         return userData;
@@ -76,10 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Registrierungsversuch:", credentials.username);
       try {
         const res = await apiRequest("POST", "/api/register", credentials);
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.message || "Registrierung fehlgeschlagen");
-        }
         const userData = await res.json();
         console.log("Registrierung erfolgreich:", userData);
         return userData;

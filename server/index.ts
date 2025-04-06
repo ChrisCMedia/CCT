@@ -10,6 +10,7 @@ import { promisify } from "util";
 import path from "path";
 import fs from "fs";
 import cors from "cors";
+import { initializeDatabase } from "./dbInit";
 
 const execAsync = promisify(exec);
 
@@ -112,6 +113,11 @@ if (!process.env.VERCEL) {
   log("Starting server initialization...");
 
   try {
+    // Initialisiere die Datenbank vor dem Serverstart
+    log("Initialisiere Datenbank...");
+    await initializeDatabase();
+    log("Datenbank erfolgreich initialisiert");
+
     const server = registerRoutes(app);
     setupLinkedInAuth(app);
 

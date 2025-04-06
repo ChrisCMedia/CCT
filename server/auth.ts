@@ -95,25 +95,44 @@ export function setupAuth(app: Express) {
 
       const hashedPassword = await hashPassword(req.body.password);
       
-      const user = await storage.createUser({
-        username: req.body.username,
-        password: hashedPassword
-      });
+      try {
+        const user = await storage.createUser({
+          username: req.body.username,
+          password: hashedPassword
+        });
 
-      console.log("Benutzer erfolgreich erstellt mit ID:", user.id);
-      
-      req.login(user, (err) => {
-        if (err) {
-          console.error("Login nach Registrierung fehlgeschlagen:", err);
-          return next(err);
+        console.log("Benutzer erfolgreich erstellt mit ID:", user.id);
+        
+        req.login(user, (err) => {
+          if (err) {
+            console.error("Login nach Registrierung fehlgeschlagen:", err);
+            return next(err);
+          }
+          console.log("Benutzer erfolgreich angemeldet nach Registrierung, Session-ID:", req.sessionID);
+          const { password, ...userWithoutPassword } = user;
+          res.status(201).json(userWithoutPassword);
+        });
+      } catch (dbError: any) {
+        console.error("Datenbankfehler bei der Benutzerregistrierung:", dbError);
+        if (dbError.code) {
+          console.error("Datenbankfehlercode:", dbError.code);
         }
-        console.log("Benutzer erfolgreich angemeldet nach Registrierung, Session-ID:", req.sessionID);
-        const { password, ...userWithoutPassword } = user;
-        res.status(201).json(userWithoutPassword);
+        if (dbError.constraint) {
+          console.error("Verletzte Constraint:", dbError.constraint);
+        }
+        return res.status(500).json({ 
+          message: "Registrierung fehlgeschlagen, Datenbankfehler", 
+          error: dbError.message,
+          code: dbError.code || 'unknown'
+        });
+      }
+    } catch (error: any) {
+      console.error("Allgemeiner Fehler bei der Registrierung:", error);
+      res.status(500).json({ 
+        message: "Registrierung fehlgeschlagen", 
+        error: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
-    } catch (error) {
-      console.error("Fehler bei der Registrierung:", error);
-      res.status(500).json({ message: "Registrierung fehlgeschlagen", error: error.message });
     }
   });
 
@@ -127,7 +146,7 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Benutzername und Passwort sind erforderlich" });
       }
       
-      passport.authenticate("local", (err, user, info) => {
+      passport.authenticate("local", (err: any, user: Express.User | false, info: any) => {
         if (err) {
           console.error("Passport Auth Fehler:", err);
           return res.status(500).json({ message: "Authentifizierungsfehler", error: err.message });
@@ -138,10 +157,10 @@ export function setupAuth(app: Express) {
           return res.status(401).json({ message: "Ungültige Anmeldeinformationen" });
         }
         
-        req.login(user, (err) => {
-          if (err) {
-            console.error("Login-Sitzung konnte nicht erstellt werden:", err);
-            return res.status(500).json({ message: "Sitzung konnte nicht erstellt werden", error: err.message });
+        req.login(user, (loginErr) => {
+          if (loginErr) {
+            console.error("Login-Sitzung konnte nicht erstellt werden:", loginErr);
+            return res.status(500).json({ message: "Sitzung konnte nicht erstellt werden", error: loginErr.message });
           }
           
           console.log("Login erfolgreich für Benutzer:", user.id);
@@ -150,9 +169,13 @@ export function setupAuth(app: Express) {
           return res.status(200).json(userWithoutPassword);
         });
       })(req, res);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Unerwarteter Fehler beim Login:", error);
-      res.status(500).json({ message: "Login fehlgeschlagen", error: error.message });
+      res.status(500).json({ 
+        message: "Login fehlgeschlagen", 
+        error: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
     }
   });
 

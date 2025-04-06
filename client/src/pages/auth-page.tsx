@@ -9,6 +9,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { Redirect } from "wouter";
 import type { InsertUser } from "@shared/schema";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -44,6 +46,15 @@ export default function AuthPage() {
                   )}
                   className="space-y-4"
                 >
+                  {loginMutation.isError && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Fehler</AlertTitle>
+                      <AlertDescription>
+                        {loginMutation.error?.message || "Login fehlgeschlagen"}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="username">Benutzername</Label>
                     <Input
@@ -66,7 +77,7 @@ export default function AuthPage() {
                     className="w-full"
                     disabled={loginMutation.isPending}
                   >
-                    Anmelden
+                    {loginMutation.isPending ? "Bitte warten..." : "Anmelden"}
                   </Button>
                 </form>
               </TabsContent>
@@ -78,6 +89,15 @@ export default function AuthPage() {
                   )}
                   className="space-y-4"
                 >
+                  {registerMutation.isError && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Fehler</AlertTitle>
+                      <AlertDescription>
+                        {registerMutation.error?.message || "Registrierung fehlgeschlagen"}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="reg-username">Benutzername</Label>
                     <Input
@@ -100,7 +120,7 @@ export default function AuthPage() {
                     className="w-full"
                     disabled={registerMutation.isPending}
                   >
-                    Registrieren
+                    {registerMutation.isPending ? "Bitte warten..." : "Registrieren"}
                   </Button>
                 </form>
               </TabsContent>
