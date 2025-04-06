@@ -12,6 +12,9 @@ import fs from "fs";
 import cors from "cors";
 import { initializeDatabase } from "./dbInit";
 
+// Declare module für node-cron, um TypeScript-Fehler zu vermeiden
+declare module 'node-cron';
+
 // Prozessweite Fehlerbehandlung
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -132,7 +135,7 @@ if (!process.env.VERCEL) {
     try {
       await initializeDatabase();
       log("Datenbank erfolgreich initialisiert");
-    } catch (dbInitError) {
+    } catch (dbInitError: any) {
       log(`Fehler bei der Datenbankinitialisierung: ${dbInitError.message}`);
       log(`Stack-Trace: ${dbInitError.stack}`);
       // In Produktion versuchen wir trotzdem weiterzumachen
@@ -178,7 +181,7 @@ if (!process.env.VERCEL) {
     }
 
     // Vercel verwendet PORT Umgebungsvariable oder 3000 als Standard
-    const PORT = process.env.PORT || 5001;
+    const PORT = parseInt(process.env.PORT || '5001', 10);
     server.listen(PORT, "0.0.0.0", () => {
       log(`Server successfully started and listening on port ${PORT}`);
       log(`Environment: ${app.get("env")}`);
@@ -194,7 +197,7 @@ if (!process.env.VERCEL) {
     } else {
       log("Überspringe Backup in Entwicklungsumgebung oder auf Vercel");
     }
-  } catch (error) {
+  } catch (error: any) {
     log(`KRITISCHER FEHLER beim Serverstart: ${error}`);
     console.error("Stack-Trace:", error.stack);
     process.exit(1);

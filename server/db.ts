@@ -9,13 +9,14 @@ import { dirname } from 'path';
 
 // WebSocket für Neon konfigurieren
 neonConfig.webSocketConstructor = ws;
-// Debugging für Neon-Verbindungen aktivieren
-neonConfig.wsProxy = process.env.VERCEL ? true : false;
-// 30 Sekunden Timeout für Neon-Verbindungen
-neonConfig.connectTimeout = 30 * 1000;
-// Versuche 5 mal zu verbinden
-neonConfig.retryInterval = 1000;
-neonConfig.retryLimit = 5;
+// Proxy für WebSockets aktivieren (nur für Vercel)
+neonConfig.wsProxy = process.env.VERCEL === 'true' || process.env.VERCEL === '1' ? true : undefined;
+
+// Custom Konfiguration für bessere Verbindungsstabilität
+// Diese sind nicht Teil der öffentlichen API von Neon, daher TypeScript-Fehler ignorieren
+(neonConfig as any).connectTimeout = 30 * 1000;
+(neonConfig as any).retryInterval = 1000;
+(neonConfig as any).retryLimit = 5;
 
 // SQLite für lokale Entwicklung verwenden, wenn keine DATABASE_URL gesetzt ist
 let db;
@@ -58,7 +59,7 @@ try {
       ]);
       
       console.log("PostgreSQL-Verbindung erfolgreich getestet:", testResult);
-    } catch (connError) {
+    } catch (connError: any) {
       console.error("PostgreSQL-Verbindungstest fehlgeschlagen:", connError);
       // Versuche trotzdem die DB zu initialisieren
     }
@@ -82,7 +83,7 @@ try {
     db = drizzleSQLite(sqlite, { schema });
     console.log("SQLite-Verbindung initialisiert:", dbPath);
   }
-} catch (error) {
+} catch (error: any) {
   console.error("KRITISCHER FEHLER bei der Datenbankinitialisierung:", error);
   console.error("Stack-Trace:", error.stack);
   

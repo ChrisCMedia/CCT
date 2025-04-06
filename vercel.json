@@ -8,7 +8,17 @@
       "use": "@vercel/node",
       "config": {
         "maxLambdaSize": "50mb",
-        "includeFiles": ["**/node_modules/**"]
+        "includeFiles": [
+          "node_modules/@neondatabase/**",
+          "node_modules/drizzle-orm/**",
+          "node_modules/ws/**",
+          "node_modules/bufferutil/**",
+          "node_modules/utf-8-validate/**"
+        ],
+        "excludeFiles": [
+          "node_modules/**/*.{dist,esm,map,md,txt,ts,mjs}",
+          "node_modules/**/{test,tests,__tests__}/**"
+        ]
       }
     },
     {
