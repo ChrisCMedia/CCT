@@ -1,12 +1,12 @@
-import { db, pool } from './db.js';
+import { db, pool } from './db';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { migrate as pgMigrate } from 'drizzle-orm/neon-serverless/migrator';
-import { users, todos, subtasks, posts, newsletters, socialAccounts, postAccounts, postAnalytics, postComments, backups } from '../shared/schema.js';
+import { users, todos, subtasks, posts, newsletters, socialAccounts, postAccounts, postAnalytics, postComments, backups } from '@shared/schema';
 import { sql } from 'drizzle-orm';
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
 import { Pool } from "@neondatabase/serverless";
-import { hashPassword } from "./auth.js";
+import { hashPassword } from "./auth";
 
 // Funktion zum Hashen von Passwörtern (kopiert aus auth.ts)
 const scryptAsync = promisify(scrypt);

@@ -1,3 +1,4 @@
+import 'tsconfig-paths/register';
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
@@ -5,9 +6,9 @@ import path from "path";
 import passport from "passport";
 import session from "express-session";
 import http from 'http';
-import { initializeDatabase } from "./dbInit.js";
-import { setupAuth } from "./auth.js";
-import { storage } from "./storage.js";
+import { initializeDatabase } from "./dbInit";
+import { setupAuth } from "./auth";
+import { storage } from "./storage";
 
 // Express-Anwendung initialisieren
 const app = express();

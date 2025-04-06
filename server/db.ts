@@ -3,9 +3,10 @@ import { drizzle } from 'drizzle-orm/neon-serverless';
 import { drizzle as drizzleSQLite } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
 import ws from "ws";
-import * as schema from "../shared/schema.js";
+import * as schema from "@shared/schema";
 import { existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { hashPassword } from './auth';
 
 // DEBUG: Log der Umgebungsvariablen (teilweise maskiert)
 console.log("--- DB VERBINDUNGS-DEBUG START ---");
@@ -144,8 +145,6 @@ try {
         if (adminCheck.rows.length === 0) {
           console.log("Admin-Benutzer nicht gefunden, erstelle einen...");
           
-          // Importiere hash-Funktion aus auth.ts
-          const { hashPassword } = await import('./auth');
           const hashedPassword = await hashPassword('admin123');
           
           await pool.query(
@@ -162,7 +161,6 @@ try {
           if (!user.password.includes('.')) {
             console.log("Admin-Passwort ist nicht gehashed, aktualisiere...");
             
-            const { hashPassword } = await import('./auth');
             const hashedPassword = await hashPassword('admin123');
             
             await pool.query(
