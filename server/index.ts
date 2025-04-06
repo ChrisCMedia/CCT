@@ -11,6 +11,7 @@ import path from "path";
 import fs from "fs";
 import cors from "cors";
 import { initializeDatabase } from "./dbInit";
+import { configureAuth } from "./auth";
 
 // Declare module für node-cron, um TypeScript-Fehler zu vermeiden
 declare module 'node-cron';
@@ -78,36 +79,36 @@ app.use((req, res, next) => {
   next();
 });
 
-// NOTFALL-ROUTEN für den Fall, dass die routes.ts nicht geladen werden kann
-app.get('/api/user', (req, res) => {
-  console.log('NOTFALL-ROUTE: /api/user');
-  return res.json({ id: 1, username: 'admin' });
-});
+// NOTFALL-ROUTEN werden entfernt, da wir jetzt die richtige Authentifizierung haben
+// app.get('/api/user', (req, res) => {
+//   console.log('NOTFALL-ROUTE: /api/user');
+//   return res.json({ id: 1, username: 'admin' });
+// });
 
-app.post('/api/login', (req, res) => {
-  console.log('NOTFALL-ROUTE: /api/login');
-  return res.json({ id: 1, username: 'admin' });
-});
+// app.post('/api/login', (req, res) => {
+//   console.log('NOTFALL-ROUTE: /api/login');
+//   return res.json({ id: 1, username: 'admin' });
+// });
 
-app.get('/api/todos', (req, res) => {
-  console.log('NOTFALL-ROUTE: /api/todos');
-  return res.json([]);
-});
+// app.get('/api/todos', (req, res) => {
+//   console.log('NOTFALL-ROUTE: /api/todos');
+//   return res.json([]);
+// });
 
-app.get('/api/users', (req, res) => {
-  console.log('NOTFALL-ROUTE: /api/users');
-  return res.json([{ id: 1, username: 'admin' }]);
-});
+// app.get('/api/users', (req, res) => {
+//   console.log('NOTFALL-ROUTE: /api/users');
+//   return res.json([{ id: 1, username: 'admin' }]);
+// });
 
-app.get('/api/social-accounts', (req, res) => {
-  console.log('NOTFALL-ROUTE: /api/social-accounts');
-  return res.json([]);
-});
+// app.get('/api/social-accounts', (req, res) => {
+//   console.log('NOTFALL-ROUTE: /api/social-accounts');
+//   return res.json([]);
+// });
 
-app.get('/api/posts', (req, res) => {
-  console.log('NOTFALL-ROUTE: /api/posts');
-  return res.json([]);
-});
+// app.get('/api/posts', (req, res) => {
+//   console.log('NOTFALL-ROUTE: /api/posts');
+//   return res.json([]);
+// });
 
 // Automatisches wöchentliches Backup
 async function createBackup() {
@@ -191,6 +192,9 @@ if (!process.env.VERCEL) {
     }
 
     setupLinkedInAuth(app);
+
+    // Auth-Konfiguration
+    configureAuth(app, storage);
 
     // Globale Fehlerbehandlung
     app.use((err: any, req: Request, res: Response, _next: NextFunction) => {

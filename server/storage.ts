@@ -1,6 +1,6 @@
 import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup, postComments, PostComment, InsertPostComment } from "@shared/schema";
 import { db } from "./db";
-import { eq, asc, isNotNull, isNull, desc } from "drizzle-orm";
+import { eq, asc, isNotNull, isNull, desc, and, or, sql, gt, gte, lt, lte, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import memorystore from 'memorystore';
@@ -16,6 +16,17 @@ sessionStore = new MemoryStore({
   checkPeriod: 86400000 // Bereinige abgelaufene Einträge alle 24h
 });
 console.log("Memory Session-Store initialisiert");
+
+// MOCK-Daten werden nicht mehr benötigt
+// const MOCK_SOCIAL_ACCOUNTS = [
+//   { id: 1, name: "LinkedIn", userId: 1, url: "https://linkedin.com/in/example", username: "example_user" },
+//   { id: 2, name: "LinkedIn", userId: 1, url: "https://linkedin.com/in/example2", username: "example_user2" }
+// ];
+
+// const MOCK_POSTS = [
+//   { id: 1, userId: 1, accountId: 1, content: "Demo Post 1", scheduledDate: new Date().toISOString(), status: "draft" },
+//   { id: 2, userId: 1, accountId: 2, content: "Demo Post 2", scheduledDate: new Date().toISOString(), status: "scheduled" }
+// ];
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -572,6 +583,82 @@ export class DatabaseStorage implements IStorage {
 
   async deletePostComment(id: number): Promise<void> {
     await db.delete(postComments).where(eq(postComments.id, id));
+  }
+
+  async getSocialAccounts(userId: number) {
+    // Original-Funktion wiederherstellen
+    try {
+      const accounts = await db.select().from(socialAccounts).where(eq(socialAccounts.userId, userId));
+      return accounts;
+    } catch (error) {
+      console.error("Fehler beim Abrufen der Social-Media-Konten:", error);
+      return [];
+    }
+  }
+
+  async getSocialAccountById(id: number) {
+    // Original-Funktion wiederherstellen
+    try {
+      const result = await db.select().from(socialAccounts).where(eq(socialAccounts.id, id)).limit(1);
+      return result.length > 0 ? result[0] : null;
+    } catch (error) {
+      console.error("Fehler beim Abrufen des Social-Media-Kontos:", error);
+      return null;
+    }
+  }
+
+  async createSocialAccount(data: any) {
+    // Original-Funktion wiederherstellen
+    return db.insert(socialAccounts).values(data).returning().then(res => res[0]);
+  }
+
+  async updateSocialAccount(id: number, data: any) {
+    // Original-Funktion wiederherstellen
+    return db.update(socialAccounts).set(data).where(eq(socialAccounts.id, id)).returning().then(res => res[0]);
+  }
+
+  async deleteSocialAccount(id: number) {
+    // Original-Funktion wiederherstellen
+    await db.delete(socialAccounts).where(eq(socialAccounts.id, id));
+    return true;
+  }
+
+  async getPosts(userId: number) {
+    // Original-Funktion wiederherstellen
+    try {
+      const userPosts = await db.select().from(posts).where(eq(posts.userId, userId));
+      return userPosts;
+    } catch (error) {
+      console.error("Fehler beim Abrufen der Beiträge:", error);
+      return [];
+    }
+  }
+
+  async getPostById(id: number) {
+    // Original-Funktion wiederherstellen
+    try {
+      const result = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+      return result.length > 0 ? result[0] : null;
+    } catch (error) {
+      console.error("Fehler beim Abrufen des Beitrags:", error);
+      return null;
+    }
+  }
+
+  async createPost(data: any) {
+    // Original-Funktion wiederherstellen
+    return db.insert(posts).values(data).returning().then(res => res[0]);
+  }
+
+  async updatePost(id: number, data: any) {
+    // Original-Funktion wiederherstellen
+    return db.update(posts).set(data).where(eq(posts.id, id)).returning().then(res => res[0]);
+  }
+
+  async deletePost(id: number) {
+    // Original-Funktion wiederherstellen
+    await db.delete(posts).where(eq(posts.id, id));
+    return true;
   }
 }
 

@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -15,42 +15,39 @@ declare global {
 
 const scryptAsync = promisify(scrypt);
 
-async function hashPassword(password: string) {
+async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
-  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  const buf = await scryptAsync(password, salt, 64) as Buffer;
   return `${buf.toString("hex")}.${salt}`;
 }
 
-async function comparePasswords(supplied: string, stored: string) {
-  // Eigentliche Passwortvergleich-Funktion
-  console.log("Vergleiche Passwörter:", supplied, "mit gespeichertem Hash");
-  
+async function comparePasswords(supplied: string, stored: string): Promise<boolean> {
   try {
-    // Überprüfe, ob es ein korrektes Format hat (salt ist vorhanden)
-    if (!stored || !stored.includes('.')) {
-      console.warn("Ungültiges Passwort-Format, es fehlt der Salt:", stored);
-      return supplied === stored; // Fallback auf direkten Vergleich für alte Passwörter
+    console.log("Vergleiche Passwörter...");
+    console.log("Stored password hash:", stored.substring(0, 20) + "...");
+    
+    // Überprüfe, ob das gespeicherte Passwort ein Hash ist (sollte einen Punkt enthalten)
+    if (!stored.includes('.')) {
+      console.warn("Gespeichertes Passwort scheint kein Hash zu sein (kein Punkt gefunden)!");
+      return false;
     }
     
-    const [hashed, salt] = stored.split(".");
-    const hashedBuf = Buffer.from(hashed, "hex");
-    const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-    const result = timingSafeEqual(hashedBuf, suppliedBuf);
+    const [hashedPassword, salt] = stored.split(".");
+    const buf = await scryptAsync(supplied, salt, 64) as Buffer;
+    const suppliedHashed = buf.toString("hex");
     
-    console.log("Passwortvergleich Ergebnis:", result);
-    return result;
+    const match = hashedPassword === suppliedHashed;
+    console.log("Passwort-Vergleich Ergebnis:", match);
+    return match;
   } catch (error) {
-    console.error("Fehler beim Passwortvergleich:", error);
-    // Im Fehlerfall, Notfall-Fallback für admin
-    if (supplied === "admin123" && stored.startsWith("admin")) {
-      console.warn("NOTFALL-FALLBACK: Admin-Login erlaubt");
-      return true;
-    }
+    console.error("Fehler beim Passwort-Vergleich:", error);
     return false;
   }
 }
 
-export function setupAuth(app: Express) {
+export function configureAuth(app: Express, storage: typeof storage) {
+  console.log("Konfiguriere Authentifizierung...");
+
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'entwicklungsgeheimnis123',
     resave: false,
@@ -75,27 +72,49 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
+        console.log(`Passport LocalStrategy: Versuche Login für ${username}`);
         const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
-          return done(null, false);
+
+        if (!user) {
+          console.log(`Passport LocalStrategy: Benutzer ${username} nicht gefunden`);
+          return done(null, false, { message: "Ungültige Anmeldedaten" });
         }
+
+        const passwordMatch = await comparePasswords(password, user.password);
+        if (!passwordMatch) {
+          console.log(`Passport LocalStrategy: Falsches Passwort für ${username}`);
+          return done(null, false, { message: "Ungültige Anmeldedaten" });
+        }
+
+        console.log(`Passport LocalStrategy: Login erfolgreich für ${username}`);
         return done(null, user);
       } catch (error) {
+        console.error("Fehler in Passport Strategy:", error);
         return done(error);
       }
-    }),
+    })
   );
 
-  passport.serializeUser((user, done) => done(null, user.id));
+  passport.serializeUser((user: any, done) => {
+    console.log("serializeUser aufgerufen mit ID:", user.id);
+    done(null, user.id);
+  });
+
   passport.deserializeUser(async (id: number, done) => {
     try {
-      const user = await storage.getUser(id);
+      console.log("deserializeUser aufgerufen mit ID:", id);
+      const user = await storage.getUserById(id);
+      
       if (!user) {
+        console.log("deserializeUser: Benutzer nicht gefunden für ID:", id);
         return done(null, false);
       }
+      
+      console.log("deserializeUser: Benutzer gefunden für ID:", id);
       done(null, user);
     } catch (error) {
-      done(error);
+      console.error("Fehler in deserializeUser:", error);
+      done(error, null);
     }
   });
 
@@ -158,157 +177,69 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", async (req, res) => {
-    console.log("Login-Anfrage mit Benutzerdaten:", req.body.username);
+  app.post("/api/login", (req, res, next) => {
+    console.log("Login-Anfrage erhalten für:", req.body.username);
     
-    try {
-      // Extrahiere Anmeldedaten aus dem Request
-      const { username, password } = req.body;
-      if (!username || !password) {
-        console.error("Fehlende Anmeldedaten");
-        return res.status(400).json({ message: "Benutzername und Passwort erforderlich" });
-      }
-
-      // Direkte DB-Abfrage statt Passport
-      console.log("Führe direkte DB-Abfrage für Benutzer aus:", username);
-      
-      try {
-        const { pool, db } = await import('./db');
-        
-        // Direkter Pool-Zugriff falls verfügbar
-        if (pool) {
-          try {
-            console.log("Verwende direkten Pool-Zugriff...");
-            const result = await pool.query(
-              'SELECT * FROM users WHERE username = $1 LIMIT 1', 
-              [username]
-            );
-            
-            console.log(`Benutzerabfrage über Pool-Zugriff: ${result.rows.length} Ergebnisse gefunden`);
-            
-            if (result.rows.length === 0) {
-              console.error("Benutzer nicht gefunden:", username);
-              return res.status(401).json({ message: "Ungültige Anmeldedaten" });
-            }
-            
-            const user = result.rows[0];
-            console.log("Benutzer gefunden:", user.username, "Password-Hash:", user.password?.substring(0, 10) + "...");
-            
-            // Vergleiche Passwörter
-            const passwordMatches = await comparePasswords(password, user.password);
-            console.log("Passwortvergleich Ergebnis:", passwordMatches);
-            
-            if (!passwordMatches) {
-              console.error("Passwort stimmt nicht überein für Benutzer:", username);
-              return res.status(401).json({ message: "Ungültige Anmeldedaten" });
-            }
-            
-            // Erfolgreiche Anmeldung - sende Benutzerinfo zurück
-            const userResponse = {
-              id: user.id,
-              username: user.username
-            };
-            
-            // Setze den Benutzer in die Session
-            if (req.session) {
-              console.log("Setze Benutzer in Session:", userResponse.id);
-              req.session.user = userResponse;
-            } else {
-              console.warn("Session-Objekt existiert nicht!");
-            }
-            
-            console.log("Login erfolgreich für Benutzer:", username);
-            return res.json(userResponse);
-          } catch (poolError: any) {
-            console.error("Fehler bei direktem Pool-Zugriff:", poolError.message);
-            console.error("Stack:", poolError.stack);
-          }
-        }
-        
-        // Fallback zu ORM wenn Pool nicht verfügbar oder fehlgeschlagen
-        if (db) {
-          const { eq } = await import('drizzle-orm');
-          const { users } = await import('@shared/schema');
-          
-          console.log("Fallback zu ORM für Benutzerabfrage...");
-          const foundUsers = await db.select().from(users).where(eq(users.username, username));
-          
-          if (foundUsers.length === 0) {
-            console.error("Benutzer nicht gefunden:", username);
-            return res.status(401).json({ message: "Ungültige Anmeldedaten" });
-          }
-          
-          const user = foundUsers[0];
-          console.log("Benutzer gefunden:", user.username, "Password-Hash:", user.password?.substring(0, 10) + "...");
-          
-          // Vergleiche Passwörter
-          const passwordMatches = await comparePasswords(password, user.password);
-          console.log("Passwortvergleich Ergebnis:", passwordMatches);
-          
-          if (!passwordMatches) {
-            console.error("Passwort stimmt nicht überein für Benutzer:", username);
-            return res.status(401).json({ message: "Ungültige Anmeldedaten" });
-          }
-          
-          // Erfolgreiche Anmeldung - sende Benutzerinfo zurück
-          const userResponse = {
-            id: user.id,
-            username: user.username
-          };
-          
-          // Setze den Benutzer in die Session
-          if (req.session) {
-            console.log("Setze Benutzer in Session:", userResponse.id);
-            req.session.user = userResponse;
-          } else {
-            console.warn("Session-Objekt existiert nicht!");
-          }
-          
-          console.log("Login erfolgreich für Benutzer:", username);
-          return res.json(userResponse);
-        }
-        
-        // Weder Pool noch DB verfügbar
-        console.error("Weder Pool noch ORM verfügbar für Login!");
-        return res.status(500).json({ message: "Interner Serverfehler - Datenbankverbindung nicht verfügbar" });
-        
-      } catch (dbError: any) {
-        console.error("Datenbankfehler beim Login:", dbError.message);
-        console.error("Stack:", dbError.stack);
+    // Erweiterte Fehlerbehandlung für den Passport-Authenticate-Prozess
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) {
+        console.error("Passport-Authentifizierungsfehler:", err);
         return res.status(500).json({ 
-          message: "Datenbankfehler während der Anmeldung", 
-          details: dbError.message,
-          stack: dbError.stack
+          message: "Anmeldefehler", 
+          error: err.message 
         });
       }
-    } catch (error: any) {
-      console.error("Unerwarteter Fehler beim Login:", error.message);
-      console.error("Stack:", error.stack);
-      return res.status(500).json({ 
-        message: "Anmeldefehler", 
-        details: error.message,
-        stack: error.stack
+      
+      if (!user) {
+        console.log("Authentifizierung fehlgeschlagen:", info?.message);
+        return res.status(401).json({ message: info?.message || "Ungültige Anmeldedaten" });
+      }
+      
+      // Benutzer erfolgreich authentifiziert, Login in Session
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          console.error("Session-Login-Fehler:", loginErr);
+          return res.status(500).json({ message: "Sitzungsfehler", error: loginErr.message });
+        }
+        
+        console.log("Login erfolgreich für Benutzer:", user.username, "Session ID:", req.sessionID);
+        
+        // Passwort aus Antwort entfernen
+        const { password, ...userWithoutPassword } = user;
+        return res.json(userWithoutPassword);
       });
+    })(req, res, next);
+  });
+
+  app.post("/api/logout", (req, res) => {
+    console.log("Logout-Anfrage erhalten, Session-ID:", req.sessionID);
+    
+    if (req.session) {
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("Fehler beim Zerstören der Session:", err);
+          return res.status(500).json({ message: "Fehler beim Abmelden" });
+        }
+        
+        console.log("Benutzer abgemeldet, Session zerstört");
+        res.clearCookie("connect.sid");
+        return res.json({ message: "Erfolgreich abgemeldet" });
+      });
+    } else {
+      console.log("Keine aktive Session zum Abmelden");
+      res.json({ message: "Erfolgreich abgemeldet" });
     }
   });
 
-  app.post("/api/logout", (req, res, next) => {
-    req.logout((err) => {
-      if (err) return next(err);
-      res.sendStatus(200);
-    });
-  });
-
   app.get("/api/user", (req, res) => {
-    // Notfall-Bypass: Immer angemeldeten Benutzer zurückgeben
-    console.log("NOTFALL: Umgehe Authentifizierungsprüfung, gebe Admin-Benutzer zurück");
-    return res.status(200).json({
-      id: 1,
-      username: "admin"
-    });
+    console.log("User-Info-Anfrage, authentifiziert:", req.isAuthenticated(), "Session-ID:", req.sessionID);
     
-    // Original-Code (auskommentiert)
-    // if (!req.isAuthenticated()) return res.sendStatus(401);
-    // res.json(req.user);
+    if (!req.isAuthenticated()) {
+      console.log("Keine authentifizierte Session gefunden");
+      return res.status(401).json({ message: "Nicht angemeldet" });
+    }
+    
+    console.log("Benutzer angemeldet:", req.user);
+    res.json(req.user);
   });
 }
