@@ -115,9 +115,21 @@ export default function PostPlannerPage() {
       const formData = new FormData();
       formData.append("content", data.content);
       formData.append("scheduledDate", data.scheduledDate.toISOString());
-      formData.append("accountIds[]", data.accountIds[0].toString());
+      
+      if (data.accountIds.length > 0) {
+        formData.append("accountIds[]", data.accountIds[0].toString());
+        console.log("Account ID für Request:", data.accountIds[0]);
+      }
+      
       if (data.image) {
+        console.log("Füge Bild zum Upload hinzu:", data.image.name, data.image.size, data.image.type);
         formData.append("image", data.image);
+      } else {
+        console.log("Kein Bild für Upload ausgewählt");
+      }
+
+      for (const pair of formData.entries()) {
+        console.log(`FormData: ${pair[0]}, ${pair[1] instanceof File ? 'File: ' + pair[1].name : pair[1]}`);
       }
 
       const res = await fetch("/api/posts", {
@@ -126,7 +138,9 @@ export default function PostPlannerPage() {
       });
 
       if (!res.ok) {
-        throw new Error("Fehler beim Erstellen des Posts");
+        const errorData = await res.json().catch(() => ({ message: "Unbekannter Fehler" }));
+        console.error("Post-Erstellung fehlgeschlagen:", errorData);
+        throw new Error(errorData.message || "Fehler beim Erstellen des Posts");
       }
 
       return res.json();
@@ -146,6 +160,14 @@ export default function PostPlannerPage() {
         description: "Ihr Post wurde erfolgreich geplant",
       });
     },
+    onError: (error: Error) => {
+      console.error("Post-Erstellung fehlgeschlagen:", error);
+      toast({
+        title: "Fehler",
+        description: `Der Post konnte nicht erstellt werden: ${error.message}`,
+        variant: "destructive",
+      });
+    }
   });
 
   const updatePostMutation = useMutation({

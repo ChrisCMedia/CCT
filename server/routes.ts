@@ -16,20 +16,77 @@ const execAsync = promisify(exec);
 // Überprüfe, ob das Uploads-Verzeichnis existiert, wenn nicht, erstelle es
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  try {
+    console.log("Erstelle Uploads-Verzeichnis:", uploadsDir);
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    
+    // In Produktionsumgebungen: Stelle sicher, dass die Berechtigungen stimmen
+    if (process.platform !== 'win32') { // Nur auf Unix-basierten Systemen
+      try {
+        fs.chmodSync(uploadsDir, 0o755); // rwxr-xr-x
+        console.log("Berechtigungen für Uploads-Verzeichnis gesetzt");
+      } catch (permErr) {
+        console.error("Konnte Berechtigungen für Uploads-Verzeichnis nicht setzen:", permErr);
+      }
+    }
+    
+    console.log("Uploads-Verzeichnis erfolgreich erstellt");
+  } catch (err) {
+    console.error("Fehler beim Erstellen des Uploads-Verzeichnisses:", err);
+    console.error("Arbeitsverzeichnis:", process.cwd());
+    // Versuche einen alternativen Pfad
+    const altUploadsDir = path.join(__dirname, "..", "uploads");
+    console.log("Versuche alternatives Uploads-Verzeichnis:", altUploadsDir);
+    if (!fs.existsSync(altUploadsDir)) {
+      try {
+        fs.mkdirSync(altUploadsDir, { recursive: true });
+        console.log("Alternatives Uploads-Verzeichnis erstellt:", altUploadsDir);
+      } catch (altErr) {
+        console.error("Konnte auch alternatives Uploads-Verzeichnis nicht erstellen:", altErr);
+      }
+    }
+  }
+} else {
+  console.log("Uploads-Verzeichnis existiert bereits:", uploadsDir);
+  // Versuche Schreibberechtigungen zu prüfen
+  try {
+    const testFile = path.join(uploadsDir, '.write-test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    console.log("Uploads-Verzeichnis ist beschreibbar");
+  } catch (err) {
+    console.error("WARNUNG: Uploads-Verzeichnis existiert, ist aber möglicherweise nicht beschreibbar:", err);
+  }
 }
 
 // Konfiguriere Multer für die Speicherung von Dateien
 const storage_config = multer.diskStorage({
   destination: (req, file, cb) => {
+    // Stelle sicher, dass das Uploads-Verzeichnis existiert
+    if (!fs.existsSync(uploadsDir)) {
+      try {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+        console.log("Uploads-Verzeichnis erstellt in destination callback");
+      } catch (err) {
+        console.error("Fehler beim Erstellen des Uploads-Verzeichnisses in callback:", err);
+        return cb(new Error("Upload-Verzeichnis konnte nicht erstellt werden"), null);
+      }
+    }
     cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
-    // Verwende den ursprünglichen Dateinamen, ergänzt um einen Zeitstempel
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const fileExtension = path.extname(file.originalname);
-    const fileName = path.basename(file.originalname, fileExtension) + '-' + uniqueSuffix + fileExtension;
-    cb(null, fileName);
+    try {
+      // Bereinige den Dateinamen, um ungültige Zeichen zu entfernen
+      const originalName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const fileExtension = path.extname(originalName);
+      const fileName = path.basename(originalName, fileExtension) + '-' + uniqueSuffix + fileExtension;
+      console.log(`Generiere Dateinamen: ${originalName} -> ${fileName}`);
+      cb(null, fileName);
+    } catch (error) {
+      console.error("Fehler bei der Dateinamengenerierung:", error);
+      cb(new Error("Fehler bei der Verarbeitung des Dateinamens"), null);
+    }
   }
 });
 
@@ -39,17 +96,48 @@ const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB
   },
   fileFilter: (_req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
+    // Erweiterte Liste erlaubter Dateitypen
+    const allowedTypes = [
+      "image/jpeg", 
+      "image/png", 
+      "image/gif", 
+      "image/webp", 
+      "image/svg+xml",
+      "image/bmp"
+    ];
+    
+    console.log("Überprüfe Dateityp:", file.mimetype);
+    
     if (!allowedTypes.includes(file.mimetype)) {
-      cb(new Error("Nur Bilder sind erlaubt"));
-      return;
+      console.error("Unerlaubter Dateityp:", file.mimetype);
+      return cb(new Error(`Dateityp nicht erlaubt. Erlaubte Typen: ${allowedTypes.join(', ')}`));
     }
     cb(null, true);
   },
 });
 
+// Globaler Multer-Fehlerhandler
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    // Multer-spezifischer Fehler
+    console.error("Multer-Fehler:", err.code, err.message);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ message: "Datei ist zu groß. Maximale Größe ist 5MB." });
+    }
+    return res.status(400).json({ message: `Upload-Fehler: ${err.message}` });
+  } else if (err) {
+    // Sonstiger Fehler
+    console.error("Fehler beim Datei-Upload:", err);
+    return res.status(500).json({ message: err.message || "Fehler beim Hochladen der Datei" });
+  }
+  next();
+};
+
 export function registerRoutes(app: express.Application): Server {
   setupAuth(app);
+
+  // Registriere den Multer-Fehlerhandler
+  app.use(handleMulterError);
 
   // Serve uploaded files mit CORS und Cache-Control
   app.use("/uploads", express.static("uploads", {
@@ -189,122 +277,188 @@ export function registerRoutes(app: express.Application): Server {
     }
   });
 
-  app.post("/api/posts", upload.single("image"), async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    try {
-      console.log("Post-Erstellungsanfrage erhalten:", req.body);
-      
-      let imageUrl = null;
-      if (req.file) {
-        imageUrl = `/uploads/${req.file.filename}`;
-        console.log("Bild hochgeladen:", imageUrl);
-      }
-
-      // Extrahiere accountId aus der Anfrage
-      let accountId = null;
-      if (req.body.accountIds) {
-        if (Array.isArray(req.body.accountIds)) {
-          accountId = Number(req.body.accountIds[0]);
-          console.log("AccountId aus Array:", accountId);
-        } else if (typeof req.body.accountIds === 'string') {
-          // Wenn es ein String ist, versuche zu parsen (könnte ein JSON-Array sein)
-          try {
-            const accountIdsArray = JSON.parse(req.body.accountIds);
-            accountId = Number(accountIdsArray[0]);
-            console.log("AccountId aus JSON-String:", accountId);
-          } catch (e) {
-            // Falls es ein einzelner String ist, versuche ihn direkt zu konvertieren
-            accountId = Number(req.body.accountIds);
-            console.log("AccountId aus einfachem String:", accountId);
+  app.post("/api/posts", 
+    // Multer-Middleware mit Fehlerbehandlung
+    (req, res, next) => {
+      upload.single("image")(req, res, (err) => {
+        if (err) {
+          console.error("Fehler beim Upload:", err);
+          if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+              return res.status(413).json({ 
+                message: "Datei ist zu groß. Maximale Größe ist 5MB." 
+              });
+            }
+            return res.status(400).json({ 
+              message: `Upload-Fehler: ${err.message}` 
+            });
           }
+          return res.status(400).json({ 
+            message: err.message || "Fehler beim Hochladen der Datei" 
+          });
         }
-      }
-
-      // Fallback auf accountId Feld, falls vorhanden
-      if (!accountId && req.body.accountId) {
-        accountId = Number(req.body.accountId);
-        console.log("AccountId aus direktem Feld:", accountId);
-      }
-
-      // Falls keine accountId gefunden wurde, verwende Standard-Account 1
-      if (!accountId) {
-        accountId = 1; // Standard-Account (LinkedIn Demo Account)
-        console.log("Verwende Standard-AccountId:", accountId);
-      }
-
-      // Validiere das Datum
-      let scheduledDate;
-      try {
-        scheduledDate = new Date(req.body.scheduledDate);
-        if (isNaN(scheduledDate.getTime())) {
-          throw new Error("Ungültiges Datum");
-        }
-      } catch (error) {
-        console.error("Fehler beim Parsen des Datums:", error, req.body.scheduledDate);
-        return res.status(400).json({ message: "Ungültiges Datum" });
-      }
-
-      const postData = {
-        content: req.body.content,
-        scheduledDate: scheduledDate,
-        accountId: accountId,
-        imageUrl,
-        userId: req.user.id,
-      };
-
-      console.log("Erstelle Post mit Daten:", postData);
-      const post = await storage.createPost(postData);
-      console.log("Post erfolgreich erstellt:", post.id);
-      res.json(post);
-    } catch (error) {
-      console.error("Fehler beim Erstellen des Posts:", error);
-      res.status(500).json({ message: "Failed to create post", error: error.message });
-    }
-  });
-
-  app.patch("/api/posts/:id", upload.single("image"), async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    try {
-      const existingPost = await storage.getPost(Number(req.params.id));
-      if (!existingPost) {
-        return res.status(404).json({ message: "Post nicht gefunden" });
-      }
-
-      let imageUrl = existingPost.imageUrl;
-      if (req.file) {
-        imageUrl = `/uploads/${req.file.filename}`;
-
-        // Optional: Lösche das alte Bild
-        if (existingPost.imageUrl) {
-          const oldImagePath = path.join(process.cwd(), existingPost.imageUrl.slice(1));
-          try {
-            await fs.promises.unlink(oldImagePath);
-          } catch (err) {
-            console.error("Error deleting old image:", err);
-          }
-        }
-      }
-
-      // Parse boolean value from string
-      const scheduledInLinkedIn = req.body.scheduledInLinkedIn === 'true';
-
-      const post = await storage.updatePost(Number(req.params.id), {
-        content: req.body.content,
-        userId: req.user.id,
-        scheduledDate: req.body.scheduledDate ? new Date(req.body.scheduledDate) : undefined,
-        accountId: req.body.accountId ? Number(req.body.accountId) : undefined,
-        imageUrl,
-        visibility: req.body.visibility,
-        postType: req.body.postType,
-        articleUrl: req.body.articleUrl,
-        scheduledInLinkedIn,
+        next();
       });
-      res.json(post);
-    } catch (error) {
-      console.error("Error updating post:", error);
-      res.status(500).json({ message: "Failed to update post" });
+    },
+    async (req, res) => {
+      if (!req.isAuthenticated()) return res.sendStatus(401);
+      try {
+        console.log("Post-Erstellungsanfrage erhalten:", req.body);
+        console.log("Dateiinformationen:", req.file || "Keine Datei hochgeladen");
+        
+        let imageUrl = null;
+        if (req.file) {
+          imageUrl = `/uploads/${req.file.filename}`;
+          console.log("Bild hochgeladen:", imageUrl);
+          
+          // Überprüfe, ob die Datei tatsächlich existiert
+          const filePath = path.join(process.cwd(), 'uploads', req.file.filename);
+          if (!fs.existsSync(filePath)) {
+            console.error("Warnung: Hochgeladene Datei existiert nicht am erwarteten Pfad:", filePath);
+          } else {
+            console.log("Datei erfolgreich gespeichert:", filePath);
+          }
+        }
+
+        // Extrahiere accountId aus der Anfrage
+        let accountId = null;
+        if (req.body.accountIds) {
+          if (Array.isArray(req.body.accountIds)) {
+            accountId = Number(req.body.accountIds[0]);
+            console.log("AccountId aus Array:", accountId);
+          } else if (typeof req.body.accountIds === 'string') {
+            // Wenn es ein String ist, versuche zu parsen (könnte ein JSON-Array sein)
+            try {
+              const accountIdsArray = JSON.parse(req.body.accountIds);
+              accountId = Number(accountIdsArray[0]);
+              console.log("AccountId aus JSON-String:", accountId);
+            } catch (e) {
+              // Versuche es mit dem accountIds[]-Format, das häufig bei FormData verwendet wird
+              if (req.body['accountIds[]']) {
+                accountId = Number(req.body['accountIds[]']);
+                console.log("AccountId aus accountIds[]-Feld:", accountId);
+              } else {
+                // Falls es ein einzelner String ist, versuche ihn direkt zu konvertieren
+                accountId = Number(req.body.accountIds);
+                console.log("AccountId aus einfachem String:", accountId);
+              }
+            }
+          }
+        }
+
+        // Fallback auf accountId Feld, falls vorhanden
+        if (!accountId && req.body.accountId) {
+          accountId = Number(req.body.accountId);
+          console.log("AccountId aus direktem Feld:", accountId);
+        }
+
+        // Falls keine accountId gefunden wurde, verwende Standard-Account 1
+        if (!accountId) {
+          accountId = 1; // Standard-Account (LinkedIn Demo Account)
+          console.log("Verwende Standard-AccountId:", accountId);
+        }
+
+        // Validiere das Datum
+        let scheduledDate;
+        try {
+          scheduledDate = new Date(req.body.scheduledDate);
+          if (isNaN(scheduledDate.getTime())) {
+            throw new Error("Ungültiges Datum");
+          }
+          console.log("Validiertes Datum:", scheduledDate);
+        } catch (error) {
+          console.error("Fehler beim Parsen des Datums:", error, req.body.scheduledDate);
+          return res.status(400).json({ message: "Ungültiges Datum" });
+        }
+
+        const postData = {
+          content: req.body.content,
+          scheduledDate: scheduledDate,
+          accountId: accountId,
+          imageUrl,
+          userId: req.user.id,
+        };
+
+        console.log("Erstelle Post mit Daten:", postData);
+        const post = await storage.createPost(postData);
+        console.log("Post erfolgreich erstellt:", post.id);
+        res.json(post);
+      } catch (error) {
+        console.error("Fehler beim Erstellen des Posts:", error);
+        res.status(500).json({ message: "Failed to create post", error: error.message });
+      }
     }
-  });
+  );
+
+  app.patch("/api/posts/:id", 
+    // Multer-Middleware mit Fehlerbehandlung
+    (req, res, next) => {
+      upload.single("image")(req, res, (err) => {
+        if (err) {
+          console.error("Fehler beim Upload (Update):", err);
+          if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+              return res.status(413).json({ 
+                message: "Datei ist zu groß. Maximale Größe ist 5MB." 
+              });
+            }
+            return res.status(400).json({ 
+              message: `Upload-Fehler: ${err.message}` 
+            });
+          }
+          return res.status(400).json({ 
+            message: err.message || "Fehler beim Hochladen der Datei" 
+          });
+        }
+        next();
+      });
+    },
+    async (req, res) => {
+      if (!req.isAuthenticated()) return res.sendStatus(401);
+      try {
+        const existingPost = await storage.getPost(Number(req.params.id));
+        if (!existingPost) {
+          return res.status(404).json({ message: "Post nicht gefunden" });
+        }
+
+        let imageUrl = existingPost.imageUrl;
+        if (req.file) {
+          imageUrl = `/uploads/${req.file.filename}`;
+          console.log("Neues Bild hochgeladen für Post-Update:", imageUrl);
+
+          // Optional: Lösche das alte Bild
+          if (existingPost.imageUrl) {
+            const oldImagePath = path.join(process.cwd(), existingPost.imageUrl.slice(1));
+            try {
+              await fs.promises.unlink(oldImagePath);
+              console.log("Altes Bild gelöscht:", oldImagePath);
+            } catch (err) {
+              console.error("Error deleting old image:", err);
+            }
+          }
+        }
+
+        // Parse boolean value from string
+        const scheduledInLinkedIn = req.body.scheduledInLinkedIn === 'true';
+
+        const post = await storage.updatePost(Number(req.params.id), {
+          content: req.body.content,
+          userId: req.user.id,
+          scheduledDate: req.body.scheduledDate ? new Date(req.body.scheduledDate) : undefined,
+          accountId: req.body.accountId ? Number(req.body.accountId) : undefined,
+          imageUrl,
+          visibility: req.body.visibility,
+          postType: req.body.postType,
+          articleUrl: req.body.articleUrl,
+          scheduledInLinkedIn,
+        });
+        res.json(post);
+      } catch (error) {
+        console.error("Error updating post:", error);
+        res.status(500).json({ message: "Failed to update post" });
+      }
+    }
+  );
 
   app.patch("/api/posts/:id/approve", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
