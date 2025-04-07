@@ -57,7 +57,17 @@ Ihre Anwendung sollte nun auf der von Vercel bereitgestellten URL verfügbar sei
 
 # Client Communication Tool
 
-Ein Tool zur Verwaltung von Kundenkommunikation und Social Media Postings.
+Eine moderne Anwendung für die Verwaltung und Planung von Social-Media-Posts.
+
+## Features
+
+- Social Media Post Planer
+- To-Do Verwaltung
+- Newsletter Erstellung
+- Benutzerauthentifizierung
+
+## Update
+- Verbesserte Bild-Upload-Funktionalität
 
 ## Datenbankverbindung aktualisiert
 Die Anwendung ist jetzt mit einem speziellen Datenbankbenutzer konfiguriert für verbesserte Sicherheit. 
