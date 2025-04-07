@@ -68,7 +68,7 @@ Eine moderne Anwendung für die Verwaltung und Planung von Social-Media-Posts.
 
 ## Update
 - Verbesserte Bild-Upload-Funktionalität
-- Deployment-Trigger: 2
+- Deployment-Trigger: 3 (aktualisiert für Bildupload-Funktionalität mit Base64)
 
 ## Datenbankverbindung aktualisiert
 Die Anwendung ist jetzt mit einem speziellen Datenbankbenutzer konfiguriert für verbesserte Sicherheit. 
