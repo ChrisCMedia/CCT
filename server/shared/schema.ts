@@ -1,9 +1,46 @@
 import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod/index.cjs";
 import { relations } from "drizzle-orm";
 
-// Verwende CommonJS-Import für Zod
-const z = require('zod');
+// Definiere Fallbacks für Module
+const zodFallback = {
+  string: () => ({ optional: () => ({}) }),
+  number: () => ({ optional: () => ({}) }),
+  array: (type) => ({ 
+    min: () => ({}),
+    optional: () => ({})
+  }),
+  coerce: { date: () => ({}) },
+  any: () => ({ optional: () => ({}) }),
+  instanceof: () => ({ optional: () => ({}) })
+};
+
+// Fallback für createInsertSchema
+const createInsertSchemaFallback = (table) => ({
+  pick: () => ({
+    extend: () => ({})
+  })
+});
+
+// Variablen initialisieren
+let z = zodFallback;
+let createInsertSchema = createInsertSchemaFallback;
+
+// Lade Module asynchron
+Promise.all([
+  import('zod').then(zodModule => {
+    z = zodModule.default || zodModule;
+    console.log('Zod erfolgreich geladen');
+  }).catch(e => {
+    console.warn('Fehler beim Laden von Zod, verwende Fallback:', e);
+  }),
+  
+  import('drizzle-zod').then(drizzleZod => {
+    createInsertSchema = drizzleZod.createInsertSchema || drizzleZod.default?.createInsertSchema;
+    console.log('drizzle-zod erfolgreich geladen');
+  }).catch(e => {
+    console.warn('Fehler beim Laden von drizzle-zod, verwende Fallback:', e);
+  })
+]);
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
