@@ -13,7 +13,6 @@ console.log("--- DB VERBINDUNGS-DEBUG START ---");
 console.log("NODE_ENV:", process.env.NODE_ENV);
 console.log("VERCEL:", process.env.VERCEL);
 console.log("DATABASE_URL vorhanden:", !!process.env.DATABASE_URL);
-console.log("DIRECT_URL vorhanden:", !!process.env.DIRECT_URL);
 
 if (process.env.DATABASE_URL) {
   // Maskiere sensible Daten, zeige aber das Format
@@ -21,15 +20,6 @@ if (process.env.DATABASE_URL) {
   if (urlParts.length > 1) {
     const hostPart = urlParts[1];
     console.log("DATABASE_URL Format: postgresql://[username]:[password]@" + hostPart);
-  }
-}
-
-if (process.env.DIRECT_URL) {
-  // Maskiere sensible Daten, zeige aber das Format
-  const urlParts = process.env.DIRECT_URL.split('@');
-  if (urlParts.length > 1) {
-    const hostPart = urlParts[1];
-    console.log("DIRECT_URL Format: postgresql://[username]:[password]@" + hostPart);
   }
 }
 
@@ -98,6 +88,14 @@ if (!process.env.DATABASE_URL) {
 try {
   console.log("Connecting to PostgreSQL database...");
   
+  // Konfiguriere die WebSocket-Verbindung BEVOR wir versuchen zu verbinden
+  neonConfig.webSocketConstructor = ws;
+  if (process.env.VERCEL === 'true' || process.env.VERCEL === '1') {
+    const wsProxyValue = process.env.VERCEL_URL || undefined;
+    console.log("WebSocket Proxy aktiviert:", !!wsProxyValue, "Wert:", wsProxyValue);
+    neonConfig.wsProxy = wsProxyValue;
+  }
+
   // Use DATABASE_URL (Pooler) for all environments now, including Vercel
   const connectionString = process.env.DATABASE_URL;
   
@@ -112,7 +110,7 @@ try {
   
   console.log("Creating DB pool with options:");
   console.log("- connectionTimeoutMillis: 30000");
-  console.log("- max Connections:", process.env.VERCEL ? 1 : 10); // Fewer connections on Vercel
+  console.log("- max Connections:", process.env.VERCEL ? 1 : 10);
   console.log("- idleTimeoutMillis: 15000");
   
   pool = new Pool({ 
@@ -183,8 +181,46 @@ try {
     if (connError.code) {
       console.error("Fehlercode:", connError.code);
     }
+     
+    // Versuche Details zur Datenbankverbindung anzuzeigen (ohne Passwort)
+    if (connectionString) {
+      const csParts = connectionString.split(':');
+      if (csParts.length >= 4) {
+        // Format ist in etwa: postgresql://username:password@host:port/database
+        const authPart = csParts[1].replace(/\/\//g, ''); // username
+        const hostPart = csParts[3].split('/')[0]; // host:port
+        const dbPart = csParts[3].split('/')[1] || ''; // database
+        console.error("Verbindungsdetails:", `postgresql://${authPart}:[REDACTED]@${hostPart}/${dbPart}`);
+      }
+    }
     
-    throw new Error(`Datenbankverbindungsfehler: ${connError.message}`);
+    // Versuch mit direkter Verbindung (nicht über Pooler)
+    console.log("\n*** FALLBACK: Versuche direkte Verbindung ohne Pooler ***");
+    try {
+      // Ersetze "pooler" im Host mit leerem String, um direkte Verbindung zu erhalten
+      const directConnectionString = connectionString?.replace(/-pooler\./, '.');
+      console.log("Direkte Verbindungs-URL: postgresql://[username]:[password]@" + directConnectionString?.split('@')[1]);
+      
+      pool = new Pool({ 
+        connectionString: directConnectionString,
+        connectionTimeoutMillis: 30000,
+        max: process.env.VERCEL ? 1 : 10, 
+        idleTimeoutMillis: 15000, 
+      });
+      
+      console.log("Teste direkte Datenbankverbindung...");
+      const directTestResult = await pool.query('SELECT 1 as test');
+      console.log("Direkte PostgreSQL-Verbindung erfolgreich getestet:", JSON.stringify(directTestResult));
+      
+    } catch (directError: any) {
+      console.error("Auch direkte PostgreSQL-Verbindung fehlgeschlagen:");
+      console.error("Fehlertyp:", typeof directError);
+      console.error("Fehlermeldung:", directError.message);
+      console.error("Stack:", directError.stack);
+      
+      // Wenn auch der direkte Verbindungsversuch fehlschlägt, werfen wir den ursprünglichen Fehler
+      throw new Error(`Datenbankverbindungsfehler: ${connError.message}`);
+    }
   }
   
   console.log("Initialisiere Drizzle ORM mit Pool...");
