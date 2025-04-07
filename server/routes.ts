@@ -59,36 +59,8 @@ if (!fs.existsSync(uploadsDir)) {
   }
 }
 
-// Konfiguriere Multer für die Speicherung von Dateien
-const storage_config = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Stelle sicher, dass das Uploads-Verzeichnis existiert
-    if (!fs.existsSync(uploadsDir)) {
-      try {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-        console.log("Uploads-Verzeichnis erstellt in destination callback");
-      } catch (err) {
-        console.error("Fehler beim Erstellen des Uploads-Verzeichnisses in callback:", err);
-        return cb(new Error("Upload-Verzeichnis konnte nicht erstellt werden"), null);
-      }
-    }
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    try {
-      // Bereinige den Dateinamen, um ungültige Zeichen zu entfernen
-      const originalName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const fileExtension = path.extname(originalName);
-      const fileName = path.basename(originalName, fileExtension) + '-' + uniqueSuffix + fileExtension;
-      console.log(`Generiere Dateinamen: ${originalName} -> ${fileName}`);
-      cb(null, fileName);
-    } catch (error) {
-      console.error("Fehler bei der Dateinamengenerierung:", error);
-      cb(new Error("Fehler bei der Verarbeitung des Dateinamens"), null);
-    }
-  }
-});
+// Konfiguriere Multer für das Speichern im Speicher statt im Dateisystem
+const storage_config = multer.memoryStorage();
 
 const upload = multer({
   storage: storage_config,
@@ -307,17 +279,15 @@ export function registerRoutes(app: express.Application): Server {
         console.log("Dateiinformationen:", req.file || "Keine Datei hochgeladen");
         
         let imageUrl = null;
+        let imageData = null;
+        
         if (req.file) {
-          imageUrl = `/uploads/${req.file.filename}`;
-          console.log("Bild hochgeladen:", imageUrl);
-          
-          // Überprüfe, ob die Datei tatsächlich existiert
-          const filePath = path.join(process.cwd(), 'uploads', req.file.filename);
-          if (!fs.existsSync(filePath)) {
-            console.error("Warnung: Hochgeladene Datei existiert nicht am erwarteten Pfad:", filePath);
-          } else {
-            console.log("Datei erfolgreich gespeichert:", filePath);
-          }
+          // Konvertiere das Bild in einen Base64-String
+          const fileBuffer = req.file.buffer;
+          const fileType = req.file.mimetype;
+          const base64Image = fileBuffer.toString('base64');
+          imageData = `data:${fileType};base64,${base64Image}`;
+          console.log("Bild als Base64 konvertiert");
         }
 
         // Extrahiere accountId aus der Anfrage
@@ -375,11 +345,15 @@ export function registerRoutes(app: express.Application): Server {
           content: req.body.content,
           scheduledDate: scheduledDate,
           accountId: accountId,
-          imageUrl,
+          imageData: imageData, // Base64-Bild in der Datenbank speichern statt Dateipfad
           userId: req.user.id,
         };
 
-        console.log("Erstelle Post mit Daten:", postData);
+        console.log("Erstelle Post mit Daten:", { 
+          ...postData, 
+          imageData: postData.imageData ? "Base64-Daten (gekürzt)" : null 
+        });
+        
         const post = await storage.createPost(postData);
         console.log("Post erfolgreich erstellt:", post.id);
         res.json(post);
@@ -422,20 +396,16 @@ export function registerRoutes(app: express.Application): Server {
         }
 
         let imageUrl = existingPost.imageUrl;
+        let imageData = existingPost.imageData;
+        
         if (req.file) {
-          imageUrl = `/uploads/${req.file.filename}`;
-          console.log("Neues Bild hochgeladen für Post-Update:", imageUrl);
-
-          // Optional: Lösche das alte Bild
-          if (existingPost.imageUrl) {
-            const oldImagePath = path.join(process.cwd(), existingPost.imageUrl.slice(1));
-            try {
-              await fs.promises.unlink(oldImagePath);
-              console.log("Altes Bild gelöscht:", oldImagePath);
-            } catch (err) {
-              console.error("Error deleting old image:", err);
-            }
-          }
+          // Konvertiere das Bild in einen Base64-String
+          const fileBuffer = req.file.buffer;
+          const fileType = req.file.mimetype;
+          const base64Image = fileBuffer.toString('base64');
+          imageData = `data:${fileType};base64,${base64Image}`;
+          imageUrl = null; // Setze imageUrl auf null, da wir jetzt imageData verwenden
+          console.log("Neues Bild als Base64 konvertiert für Post-Update");
         }
 
         // Parse boolean value from string
@@ -447,6 +417,7 @@ export function registerRoutes(app: express.Application): Server {
           scheduledDate: req.body.scheduledDate ? new Date(req.body.scheduledDate) : undefined,
           accountId: req.body.accountId ? Number(req.body.accountId) : undefined,
           imageUrl,
+          imageData,
           visibility: req.body.visibility,
           postType: req.body.postType,
           articleUrl: req.body.articleUrl,

@@ -53,13 +53,21 @@ export interface IStorage {
   // Post operations
   getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]>;
   getPost(id: number): Promise<Post | undefined>;
-  createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post>;
+  createPost(post: { 
+    content: string; 
+    scheduledDate: Date; 
+    userId: number; 
+    accountId: number; 
+    imageUrl?: string;
+    imageData?: string;
+  }): Promise<Post>;
   updatePost(id: number, data: {
     content: string;
     userId: number;
     scheduledDate?: Date;
     accountId?: number;
     imageUrl?: string;
+    imageData?: string;
     platformPostId?: string;
     publishStatus?: string;
     visibility?: string;
@@ -319,11 +327,24 @@ export class DatabaseStorage implements IStorage {
     return post;
   }
 
-  async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
+  async createPost(post: { 
+    content: string; 
+    scheduledDate: Date; 
+    userId: number; 
+    accountId: number; 
+    imageUrl?: string;
+    imageData?: string;
+  }): Promise<Post> {
     if (!db) throw new Error('Datenbank nicht initialisiert');
     const [newPost] = await db.insert(posts).values({
-      ...post,
+      content: post.content,
+      scheduledDate: post.scheduledDate,
+      userId: post.userId,
+      accountId: post.accountId,
       imageUrl: post.imageUrl,
+      imageData: post.imageData,
+      lastEditedAt: new Date(),
+      lastEditedByUserId: post.userId,
     }).returning();
     return newPost;
   }
@@ -334,6 +355,7 @@ export class DatabaseStorage implements IStorage {
     scheduledDate?: Date;
     accountId?: number;
     imageUrl?: string;
+    imageData?: string;
     platformPostId?: string;
     publishStatus?: string;
     visibility?: string;
@@ -342,25 +364,17 @@ export class DatabaseStorage implements IStorage {
     scheduledInLinkedIn?: boolean;
   }): Promise<Post> {
     if (!db) throw new Error('Datenbank nicht initialisiert');
-    const [post] = await db
-      .update(posts)
-      .set({
-        content: data.content,
-        lastEditedAt: new Date(),
-        lastEditedByUserId: data.userId,
-        scheduledDate: data.scheduledDate,
-        accountId: data.accountId,
-        imageUrl: data.imageUrl,
-        platformPostId: data.platformPostId,
-        publishStatus: data.publishStatus,
-        visibility: data.visibility,
-        postType: data.postType,
-        articleUrl: data.articleUrl,
-        scheduledInLinkedIn: data.scheduledInLinkedIn,
-      })
+    // Aktualisiere last_edited_at und last_edited_by_user_id
+    const updateData = {
+      ...data,
+      lastEditedAt: new Date(),
+      lastEditedByUserId: data.userId
+    };
+    const [updatedPost] = await db.update(posts)
+      .set(updateData)
       .where(eq(posts.id, id))
       .returning();
-    return post;
+    return updatedPost;
   }
 
   async approvePost(id: number): Promise<Post> {

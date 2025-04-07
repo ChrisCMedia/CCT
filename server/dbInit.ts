@@ -48,6 +48,28 @@ export async function initializeDatabase() {
           ]);
           console.log("Datenbankverbindung erfolgreich hergestellt:", testConnection);
           connectionSuccessful = true;
+          
+          // Prüfe, ob die image_data-Spalte in der posts-Tabelle existiert
+          try {
+            console.log("Prüfe, ob image_data-Spalte existiert...");
+            const columnCheck = await pool.query(`
+              SELECT column_name 
+              FROM information_schema.columns 
+              WHERE table_name = 'posts' AND column_name = 'image_data'
+            `);
+            
+            if (columnCheck.rows.length === 0) {
+              console.log("image_data-Spalte existiert nicht, füge sie hinzu...");
+              await pool.query(`
+                ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_data TEXT
+              `);
+              console.log("image_data-Spalte erfolgreich hinzugefügt");
+            } else {
+              console.log("image_data-Spalte existiert bereits");
+            }
+          } catch (columnError) {
+            console.error("Fehler beim Prüfen oder Erstellen der image_data-Spalte:", columnError);
+          }
         } catch (connError) {
           console.error("Fehler bei der Datenbankverbindung:", connError);
           throw new Error(`Datenbankverbindungsfehler: ${connError instanceof Error ? connError.message : String(connError)}`);

@@ -421,9 +421,9 @@ export default function PostPlannerPage() {
                       </div>
                     </div>
                     <p className="text-sm text-gray-600 whitespace-pre-wrap">{post.content}</p>
-                    {post.imageUrl && (
+                    {(post.imageData || post.imageUrl) && (
                       <img
-                        src={post.imageUrl}
+                        src={post.imageData || post.imageUrl}
                         alt="Post Bild"
                         className="rounded-lg mt-2 w-full object-cover aspect-video"
                       />
