@@ -1,6 +1,6 @@
 import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+import { createInsertSchema } from "drizzle-zod/index.cjs";
+import * as z from "zod";
 import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
@@ -217,7 +217,7 @@ export const insertPostSchema = createInsertSchema(posts)
   .extend({
     scheduledDate: z.coerce.date(),
     accountIds: z.array(z.number()).min(1, "Mindestens ein Account muss ausgewählt werden"),
-    image: z.instanceof(File).optional(),
+    image: z.any().optional(),
   });
 
 export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
