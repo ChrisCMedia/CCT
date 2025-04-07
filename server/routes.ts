@@ -5,6 +5,7 @@ import multer from "multer";
 import path from "path";
 import express from "express";
 import { users } from "./shared/schema-basic.js";
+import { insertNewsletterSchema, insertSocialAccountSchema } from "./shared/schema.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
