@@ -556,6 +556,106 @@ export function registerRoutes(app: express.Application): Server {
       });
     }
   });
+  
+  // Erweiterte Test-Route für Posts, Todos und Newsletter
+  app.get("/api/test-db-all", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Nicht authentifiziert" });
+    
+    try {
+      console.log("Erweiterte DB-Test-Route aufgerufen");
+      const userId = (req.user as any).id;
+      const results = {
+        todo: null,
+        post: null,
+        newsletter: null,
+        socialAccount: null,
+        errors: {}
+      };
+      
+      // Test für Todo-Erstellung
+      try {
+        const testTodo = await storage.createTodo({
+          title: "Test Todo " + new Date().toISOString(),
+          userId,
+          description: "Automatisch erstellter Test-Todo",
+          subtasks: ["Test Subtask 1", "Test Subtask 2"]
+        });
+        console.log("Test-Todo erstellt:", testTodo.id);
+        results.todo = testTodo;
+      } catch (error) {
+        console.error("Fehler beim Erstellen eines Test-Todos:", error);
+        results.errors.todo = error instanceof Error ? error.message : String(error);
+      }
+      
+      // Test für Social-Account (wird für Posts benötigt)
+      try {
+        const accounts = await storage.getSocialAccounts();
+        let testAccountId;
+        
+        if (accounts && accounts.length > 0) {
+          testAccountId = accounts[0].id;
+          results.socialAccount = accounts[0];
+        } else {
+          // Erstelle einen Test-Social-Account, wenn keiner existiert
+          const testAccount = await storage.createSocialAccount({
+            platform: "Test Platform",
+            accountName: "Test Account",
+            userId
+          });
+          testAccountId = testAccount.id;
+          results.socialAccount = testAccount;
+        }
+        
+        // Test für Post-Erstellung
+        try {
+          const testPost = await storage.createPost({
+            content: "Test Post " + new Date().toISOString(),
+            scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Morgen
+            userId,
+            accountId: testAccountId,
+            imageUrl: "/uploads/test-image.jpg" // Beispielbild-URL
+          });
+          console.log("Test-Post erstellt:", testPost.id);
+          results.post = testPost;
+        } catch (error) {
+          console.error("Fehler beim Erstellen eines Test-Posts:", error);
+          results.errors.post = error instanceof Error ? error.message : String(error);
+        }
+      } catch (error) {
+        console.error("Fehler beim Abrufen/Erstellen eines Social-Accounts:", error);
+        results.errors.socialAccount = error instanceof Error ? error.message : String(error);
+      }
+      
+      // Test für Newsletter-Erstellung
+      try {
+        const testNewsletter = await storage.createNewsletter({
+          title: "Test Newsletter " + new Date().toISOString(),
+          content: "Das ist ein automatisch erstellter Test-Newsletter.",
+          userId
+        });
+        console.log("Test-Newsletter erstellt:", testNewsletter.id);
+        results.newsletter = testNewsletter;
+      } catch (error) {
+        console.error("Fehler beim Erstellen eines Test-Newsletters:", error);
+        results.errors.newsletter = error instanceof Error ? error.message : String(error);
+      }
+      
+      // Gesamtergebnis zurückgeben
+      return res.json({
+        success: true,
+        message: "Datenbank-Tests abgeschlossen",
+        results,
+        hasErrors: Object.keys(results.errors).length > 0
+      });
+    } catch (error) {
+      console.error("Fehler bei erweiterten DB-Tests:", error);
+      return res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;
