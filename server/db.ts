@@ -23,24 +23,27 @@ if (process.env.DATABASE_URL) {
   }
 }
 
-// WebSocket für Neon konfigurieren
-console.log("Konfiguriere neonConfig...");
-neonConfig.webSocketConstructor = ws;
-// Proxy für WebSockets aktivieren (nur für Vercel)
-let wsProxyValue: string | undefined = undefined;
+// In Vercel-Umgebung: WebSocket konfigurieren
 if (process.env.VERCEL === 'true' || process.env.VERCEL === '1') {
-  wsProxyValue = process.env.VERCEL_URL || undefined;
+  console.log("Konfiguriere Neon für Vercel-Umgebung...");
+  
+  // WebSocket-Konstruktor setzen
+  neonConfig.webSocketConstructor = ws;
+  
+  // Wichtig: In Vercel kann der WebSocket-Proxy hilfreich sein
+  // Wir verwenden zuerst direkte Verbindung und dann erst den Proxy als Fallback
+  neonConfig.wsProxy = undefined; // Wir starten ohne Proxy
+  
+  // Verbindungs-Timeouts erhöhen
+  neonConfig.connectionTimeoutMillis = 60000; // 60 Sekunden
+  (neonConfig as any).retryInterval = 1000;
+  (neonConfig as any).retryLimit = 5;
+  console.log("Verbindungs-Timeouts angepasst:", (neonConfig as any).connectionTimeoutMillis, "ms");
+} else {
+  // Für lokale Entwicklung
+  console.log("Konfiguriere Neon für lokale Entwicklung...");
+  neonConfig.webSocketConstructor = ws;
 }
-console.log("WebSocket Proxy aktiviert:", !!wsProxyValue, "Wert:", wsProxyValue);
-neonConfig.wsProxy = wsProxyValue;
-
-// Custom Konfiguration für bessere Verbindungsstabilität
-console.log("Setze erweiterte Verbindungskonfiguration...");
-// Diese sind nicht Teil der öffentlichen API von Neon, daher TypeScript-Fehler ignorieren
-(neonConfig as any).connectTimeout = 30 * 1000;
-(neonConfig as any).retryInterval = 1000;
-(neonConfig as any).retryLimit = 5;
-console.log("Verbindungs-Timeout:", (neonConfig as any).connectTimeout, "ms");
 
 // Exportierte Funktionen für direkten Zugriff ohne Pool
 export async function executeDirectQuery(query: string, params?: any[]): Promise<any> {
@@ -86,20 +89,17 @@ if (!process.env.DATABASE_URL) {
 }
 
 try {
-  console.log("Connecting to PostgreSQL database...");
+  console.log("Versuche direkte Verbindung zur PostgreSQL-Datenbank...");
   
-  // Konfiguriere die WebSocket-Verbindung BEVOR wir versuchen zu verbinden
-  neonConfig.webSocketConstructor = ws;
-  if (process.env.VERCEL === 'true' || process.env.VERCEL === '1') {
-    const wsProxyValue = process.env.VERCEL_URL || undefined;
-    console.log("WebSocket Proxy aktiviert:", !!wsProxyValue, "Wert:", wsProxyValue);
-    neonConfig.wsProxy = wsProxyValue;
+  // Verwende die direkte Verbindungs-URL (ohne -pooler)
+  let connectionString = process.env.DATABASE_URL;
+  // Wenn wir auf Vercel sind und die URL den Pooler enthält, entferne ihn für den ersten Versuch
+  if ((process.env.VERCEL === 'true' || process.env.VERCEL === '1') && connectionString.includes("-pooler.")) {
+    connectionString = connectionString.replace(/-pooler\./g, '.');
+    console.log("Verwende direkte URL (ohne Pooler)");
+  } else {
+    console.log("Verwende Original-URL");
   }
-
-  // Use DATABASE_URL (Pooler) for all environments now, including Vercel
-  const connectionString = process.env.DATABASE_URL;
-  
-  console.log("Using connection type: Pooler (DATABASE_URL)");
   
   // Masked URL logging
   const urlParts = connectionString?.split('@');
@@ -108,23 +108,23 @@ try {
     console.log("Using connection URL: postgresql://[username]:[password]@" + hostPart);
   }
   
-  console.log("Creating DB pool with options:");
-  console.log("- connectionTimeoutMillis: 30000");
+  console.log("Erstelle DB-Pool mit folgenden Optionen:");
+  console.log("- connectionTimeoutMillis: 60000");
   console.log("- max Connections:", process.env.VERCEL ? 1 : 10);
-  console.log("- idleTimeoutMillis: 15000");
+  console.log("- idleTimeoutMillis: 30000");
   
   pool = new Pool({ 
     connectionString,
-    connectionTimeoutMillis: 30000,
+    connectionTimeoutMillis: 60000,
     max: process.env.VERCEL ? 1 : 10, 
-    idleTimeoutMillis: 15000, 
+    idleTimeoutMillis: 30000, 
   });
   
   // Teste sofort die Verbindung mit Timeout
   try {
     console.log("Teste Datenbankverbindung...");
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Datenbankverbindungs-Timeout')), 10000);
+      setTimeout(() => reject(new Error('Datenbankverbindungs-Timeout')), 20000);
     });
     
     console.log("Führe Test-Query aus...");
@@ -173,7 +173,7 @@ try {
       console.error("Fehler beim Prüfen oder Erstellen des Admin-Benutzers:", adminError.message);
     }
   } catch (connError: any) {
-    console.error("PostgreSQL-Verbindungstest fehlgeschlagen:");
+    console.error("Direkte PostgreSQL-Verbindung fehlgeschlagen:");
     console.error("Fehlertyp:", typeof connError);
     console.error("Fehlermeldung:", connError.message);
     console.error("Stack:", connError.stack);
@@ -181,44 +181,38 @@ try {
     if (connError.code) {
       console.error("Fehlercode:", connError.code);
     }
-     
-    // Versuche Details zur Datenbankverbindung anzuzeigen (ohne Passwort)
-    if (connectionString) {
-      const csParts = connectionString.split(':');
-      if (csParts.length >= 4) {
-        // Format ist in etwa: postgresql://username:password@host:port/database
-        const authPart = csParts[1].replace(/\/\//g, ''); // username
-        const hostPart = csParts[3].split('/')[0]; // host:port
-        const dbPart = csParts[3].split('/')[1] || ''; // database
-        console.error("Verbindungsdetails:", `postgresql://${authPart}:[REDACTED]@${hostPart}/${dbPart}`);
-      }
-    }
     
-    // Versuch mit direkter Verbindung (nicht über Pooler)
-    console.log("\n*** FALLBACK: Versuche direkte Verbindung ohne Pooler ***");
+    // Versuche als Fallback den Pooler zu verwenden
+    console.log("\n*** FALLBACK: Versuche Connection Pooler ***");
     try {
-      // Ersetze "pooler" im Host mit leerem String, um direkte Verbindung zu erhalten
-      const directConnectionString = connectionString?.replace(/-pooler\./, '.');
-      console.log("Direkte Verbindungs-URL: postgresql://[username]:[password]@" + directConnectionString?.split('@')[1]);
+      // Verwende die originale URL mit Pooler
+      const poolerString = process.env.DATABASE_URL;
+      console.log("Verwende Pooler-URL:", "postgresql://[username]:[password]@" + poolerString.split('@')[1]);
+      
+      // WebSocket Proxy für Vercel aktivieren
+      if (process.env.VERCEL === 'true' || process.env.VERCEL === '1') {
+        const wsProxyValue = process.env.VERCEL_URL || undefined;
+        console.log("WebSocket Proxy aktiviert:", !!wsProxyValue, "Wert:", wsProxyValue);
+        neonConfig.wsProxy = wsProxyValue;
+      }
       
       pool = new Pool({ 
-        connectionString: directConnectionString,
-        connectionTimeoutMillis: 30000,
+        connectionString: poolerString,
+        connectionTimeoutMillis: 60000,
         max: process.env.VERCEL ? 1 : 10, 
-        idleTimeoutMillis: 15000, 
+        idleTimeoutMillis: 30000, 
       });
       
-      console.log("Teste direkte Datenbankverbindung...");
-      const directTestResult = await pool.query('SELECT 1 as test');
-      console.log("Direkte PostgreSQL-Verbindung erfolgreich getestet:", JSON.stringify(directTestResult));
+      console.log("Teste Pooler-Datenbankverbindung...");
+      const poolerResult = await pool.query('SELECT 1 as test');
+      console.log("Pooler-PostgreSQL-Verbindung erfolgreich getestet:", JSON.stringify(poolerResult));
       
-    } catch (directError: any) {
-      console.error("Auch direkte PostgreSQL-Verbindung fehlgeschlagen:");
-      console.error("Fehlertyp:", typeof directError);
-      console.error("Fehlermeldung:", directError.message);
-      console.error("Stack:", directError.stack);
+    } catch (poolerError: any) {
+      console.error("Auch Pooler-PostgreSQL-Verbindung fehlgeschlagen:");
+      console.error("Fehlertyp:", typeof poolerError);
+      console.error("Fehlermeldung:", poolerError.message);
+      console.error("Stack:", poolerError.stack);
       
-      // Wenn auch der direkte Verbindungsversuch fehlschlägt, werfen wir den ursprünglichen Fehler
       throw new Error(`Datenbankverbindungsfehler: ${connError.message}`);
     }
   }
