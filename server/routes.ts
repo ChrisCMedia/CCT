@@ -282,12 +282,17 @@ export function registerRoutes(app: express.Application): Server {
         let imageData = null;
         
         if (req.file) {
-          // Konvertiere das Bild in einen Base64-String
-          const fileBuffer = req.file.buffer;
-          const fileType = req.file.mimetype;
-          const base64Image = fileBuffer.toString('base64');
-          imageData = `data:${fileType};base64,${base64Image}`;
-          console.log("Bild als Base64 konvertiert");
+          try {
+            // Konvertiere das Bild in einen Base64-String
+            const fileBuffer = req.file.buffer;
+            const fileType = req.file.mimetype;
+            const base64Image = fileBuffer.toString('base64');
+            imageData = `data:${fileType};base64,${base64Image}`;
+            console.log("Bild als Base64 konvertiert");
+          } catch (imageError) {
+            console.error("Fehler bei der Bildkonvertierung:", imageError);
+            // Fehler bei der Bildverarbeitung führt nicht zum Abbruch des gesamten Requests
+          }
         }
 
         // Extrahiere accountId aus der Anfrage
@@ -341,6 +346,11 @@ export function registerRoutes(app: express.Application): Server {
           return res.status(400).json({ message: "Ungültiges Datum" });
         }
 
+        // Validiere content (mindestens ein Zeichen)
+        if (!req.body.content || req.body.content.trim() === '') {
+          return res.status(400).json({ message: "Der Post-Inhalt darf nicht leer sein" });
+        }
+
         const postData = {
           content: req.body.content,
           scheduledDate: scheduledDate,
@@ -354,12 +364,43 @@ export function registerRoutes(app: express.Application): Server {
           imageData: postData.imageData ? "Base64-Daten (gekürzt)" : null 
         });
         
-        const post = await storage.createPost(postData);
-        console.log("Post erfolgreich erstellt:", post.id);
-        res.json(post);
+        try {
+          // Zusätzliche Protokollierung für die Diagnose
+          console.log("Umgebungsinfo:", {
+            nodeEnv: process.env.NODE_ENV,
+            vercelEnv: process.env.VERCEL_ENV,
+            postgresMigrationAktiviert: !!process.env.POSTGRES_MIGRATE,
+          });
+          
+          const post = await storage.createPost(postData);
+          console.log("Post erfolgreich erstellt:", post.id);
+          res.json(post);
+        } catch (dbError) {
+          console.error("Datenbankfehler beim Erstellen des Posts:", dbError);
+          
+          // Detailliertere Fehlerinformationen erfassen
+          const errorInfo = {
+            message: "Der Post konnte nicht erstellt werden", 
+            error: dbError instanceof Error ? dbError.message : String(dbError),
+            details: "Datenbankfehler beim Speichern des Posts",
+            code: dbError.code,
+            sqlState: dbError.sqlState,
+            hint: dbError.hint,
+            errorPosition: dbError.position
+          };
+          
+          console.error("Vollständige Fehlerinformationen:", JSON.stringify(errorInfo, null, 2));
+          
+          return res.status(500).json(errorInfo);
+        }
       } catch (error) {
         console.error("Fehler beim Erstellen des Posts:", error);
-        res.status(500).json({ message: "Failed to create post", error: error.message });
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        res.status(500).json({ 
+          message: `Der Post konnte nicht erstellt werden: ${errorMessage}`, 
+          error: errorMessage,
+          stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined
+        });
       }
     }
   );

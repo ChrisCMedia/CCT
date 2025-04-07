@@ -49,26 +49,62 @@ export async function initializeDatabase() {
           console.log("Datenbankverbindung erfolgreich hergestellt:", testConnection);
           connectionSuccessful = true;
           
-          // Prüfe, ob die image_data-Spalte in der posts-Tabelle existiert
+          // Direkte Methode, um die image_data-Spalte hinzuzufügen
+          console.log("Führe direkte Spaltenhinzufügung durch...");
+          
           try {
-            console.log("Prüfe, ob image_data-Spalte existiert...");
-            const columnCheck = await pool.query(`
+            // Einfacher, aber effektiver SQL-Befehl, der in den meisten PostgreSQL-Versionen funktioniert
+            await pool.query(`
+              DO $$ 
+              BEGIN 
+                BEGIN
+                  ALTER TABLE posts ADD COLUMN image_data TEXT;
+                  RAISE NOTICE 'Spalte image_data zur posts-Tabelle hinzugefügt';
+                EXCEPTION
+                  WHEN duplicate_column THEN 
+                    RAISE NOTICE 'Spalte image_data existiert bereits';
+                END;
+              END $$;
+            `);
+            
+            console.log("SQL-Befehl zur Spaltenhinzufügung abgeschlossen");
+            
+            // Überprüfe, ob die Spalte jetzt existiert
+            const checkResult = await pool.query(`
               SELECT column_name 
               FROM information_schema.columns 
               WHERE table_name = 'posts' AND column_name = 'image_data'
             `);
             
-            if (columnCheck.rows.length === 0) {
-              console.log("image_data-Spalte existiert nicht, füge sie hinzu...");
-              await pool.query(`
-                ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_data TEXT
-              `);
-              console.log("image_data-Spalte erfolgreich hinzugefügt");
+            if (checkResult.rows.length > 0) {
+              console.log("Bestätigung: Spalte image_data existiert jetzt in der posts-Tabelle");
             } else {
-              console.log("image_data-Spalte existiert bereits");
+              console.error("WARNUNG: Die Spalte image_data konnte nicht in der posts-Tabelle gefunden werden");
+              
+              // Versuche zu überprüfen, ob die posts-Tabelle überhaupt existiert
+              const tableExists = await pool.query(`
+                SELECT EXISTS (
+                  SELECT FROM information_schema.tables 
+                  WHERE table_schema = 'public' AND table_name = 'posts'
+                )
+              `);
+              
+              console.log("Existiert die posts-Tabelle?", tableExists.rows[0]?.exists);
+              
+              if (tableExists.rows[0]?.exists) {
+                // Zeige alle Spalten in der Tabelle an, zur Diagnose
+                const allColumns = await pool.query(`
+                  SELECT column_name 
+                  FROM information_schema.columns 
+                  WHERE table_schema = 'public' AND table_name = 'posts'
+                `);
+                
+                console.log("Alle Spalten in der posts-Tabelle:", allColumns.rows.map(row => row.column_name));
+              }
             }
-          } catch (columnError) {
-            console.error("Fehler beim Prüfen oder Erstellen der image_data-Spalte:", columnError);
+          } catch (migrationError) {
+            console.error("Fehler beim direkten Hinzufügen der image_data-Spalte:", migrationError);
+            console.error("Details:", migrationError.message, migrationError.code);
           }
         } catch (connError) {
           console.error("Fehler bei der Datenbankverbindung:", connError);
