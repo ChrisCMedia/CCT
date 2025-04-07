@@ -4,10 +4,11 @@ import { storage } from "./storage.js";
 import multer from "multer";
 import path from "path";
 import express from "express";
-import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema } from "../shared/schema.js";
+import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema, users } from "./shared/schema.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
+import { db } from "./db.js";
 
 const execAsync = promisify(exec);
 
@@ -509,6 +510,45 @@ export function registerRoutes(app: express.Application): Server {
     } catch (error) {
       console.error("Error fetching backups:", error);
       res.status(500).json({ message: "Failed to fetch backups" });
+    }
+  });
+
+  // DB-Test-Route für einfaches Debugging
+  app.get("/api/test-db", async (req, res) => {
+    try {
+      console.log("DB-Test-Route aufgerufen");
+      
+      // Teste Verbindung zu Neon
+      if (!db) {
+        console.error("DB ist nicht initialisiert");
+        return res.status(500).json({ 
+          success: false, 
+          error: "DB nicht initialisiert",
+          env: {
+            NODE_ENV: process.env.NODE_ENV,
+            HAS_DATABASE_URL: !!process.env.DATABASE_URL,
+            DATABASE_URL_START: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + "..." : "nicht gesetzt"
+          }
+        });
+      }
+
+      // Einfache Abfrage ausführen
+      const result = await db.select().from(users).limit(1);
+      
+      // Antwort senden
+      return res.json({ 
+        success: true, 
+        message: "Datenbankverbindung funktioniert!",
+        hasUsers: result.length > 0,
+        firstUser: result.length > 0 ? { id: result[0].id, username: result[0].username } : null
+      });
+    } catch (error) {
+      console.error("Fehler bei DB-Test:", error);
+      return res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
     }
   });
 

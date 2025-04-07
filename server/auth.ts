@@ -177,29 +177,41 @@ export function setupAuth(app: Express, instanceStorage = storage) {
   });
 
   app.post("/api/login", (req, res, next) => {
+    console.log("=== LOGIN DEBUGGING ===");
     console.log("Login-Anfrage erhalten für:", req.body.username);
+    console.log("Session ID:", req.sessionID);
+    console.log("Request Headers:", JSON.stringify(req.headers, null, 2));
+    console.log("Request Body:", JSON.stringify(req.body, null, 2));
+    console.log("Datenbank verfügbar:", !!instanceStorage);
     
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) {
         console.error("Passport-Authentifizierungsfehler:", err);
         return res.status(500).json({ 
           message: "Anmeldefehler", 
-          error: err.message 
+          error: err.message,
+          stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined
         });
       }
       
       if (!user) {
         console.log("Authentifizierung fehlgeschlagen:", info?.message);
+        console.log("Info-Objekt:", JSON.stringify(info, null, 2));
         return res.status(401).json({ message: info?.message || "Ungültige Anmeldedaten" });
       }
       
       req.login(user, (loginErr) => {
         if (loginErr) {
           console.error("Session-Login-Fehler:", loginErr);
-          return res.status(500).json({ message: "Sitzungsfehler", error: loginErr.message });
+          return res.status(500).json({ 
+            message: "Sitzungsfehler", 
+            error: loginErr.message,
+            stack: process.env.NODE_ENV !== 'production' ? loginErr.stack : undefined
+          });
         }
         
         console.log("Login erfolgreich für Benutzer:", user.username, "Session ID:", req.sessionID);
+        console.log("Benutzer-Objekt:", JSON.stringify(user, null, 2));
         
         const { password, ...userWithoutPassword } = user;
         return res.json(userWithoutPassword);
