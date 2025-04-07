@@ -37,9 +37,12 @@ if (process.env.DIRECT_URL) {
 console.log("Konfiguriere neonConfig...");
 neonConfig.webSocketConstructor = ws;
 // Proxy für WebSockets aktivieren (nur für Vercel)
-const wsProxy = process.env.VERCEL === 'true' || process.env.VERCEL === '1' ? process.env.VERCEL_URL || true : undefined;
-console.log("WebSocket Proxy aktiviert:", wsProxy);
-neonConfig.wsProxy = wsProxy;
+let wsProxyValue: string | undefined = undefined;
+if (process.env.VERCEL === 'true' || process.env.VERCEL === '1') {
+  wsProxyValue = process.env.VERCEL_URL || undefined;
+}
+console.log("WebSocket Proxy aktiviert:", !!wsProxyValue, "Wert:", wsProxyValue);
+neonConfig.wsProxy = wsProxyValue;
 
 // Custom Konfiguration für bessere Verbindungsstabilität
 console.log("Setze erweiterte Verbindungskonfiguration...");

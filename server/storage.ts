@@ -453,11 +453,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSocialAccountByPlatformId(platformId: string, platform: string): Promise<SocialAccount | undefined> {
-    const [account] = await db
-      .select()
-      .from(socialAccounts)
-      .where(eq(socialAccounts.platformUserId, platformId))
-      .where(eq(socialAccounts.platform, platform));
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    const [account] = await db.select().from(socialAccounts).where(and(
+      eq(socialAccounts.platformUserId, platformId),
+      eq(socialAccounts.platform, platform)
+    ));
     return account;
   }
 
@@ -469,6 +469,7 @@ export class DatabaseStorage implements IStorage {
     platformUserId?: string;
     platformPageId?: string;
   }): Promise<SocialAccount> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [newAccount] = await db.insert(socialAccounts).values(account).returning();
     return newAccount;
   }
@@ -478,15 +479,13 @@ export class DatabaseStorage implements IStorage {
     refreshToken?: string;
     tokenExpiresAt?: Date;
   }): Promise<SocialAccount> {
-    const [account] = await db
-      .update(socialAccounts)
-      .set(data)
-      .where(eq(socialAccounts.id, id))
-      .returning();
-    return account;
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    const [updatedAccount] = await db.update(socialAccounts).set(data).where(eq(socialAccounts.id, id)).returning();
+    return updatedAccount;
   }
 
   async deleteSocialAccount(id: number): Promise<void> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     await db.delete(socialAccounts).where(eq(socialAccounts.id, id));
   }
 
@@ -500,62 +499,80 @@ export class DatabaseStorage implements IStorage {
     demographicData: any;
     updatedAt: Date;
   }): Promise<void> {
-    await db
-      .insert(postAnalytics)
-      .values({ postId, ...data })
-      .onConflictDoUpdate({
-        target: [postAnalytics.postId],
-        set: data,
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    // Prüfe, ob bereits Analytics für diesen Post existieren
+    const existing = await db.select().from(postAnalytics).where(eq(postAnalytics.postId, postId));
+
+    if (existing.length === 0) {
+      // Erstelle neuen Analytics-Eintrag
+      await db.insert(postAnalytics).values({
+        postId,
+        ...data
       });
+    } else {
+      // Aktualisiere bestehenden Eintrag
+      await db.update(postAnalytics)
+        .set(data)
+        .where(eq(postAnalytics.postId, postId));
+    }
   }
 
   async createSubtask(subtask: { title: string; todoId: number }): Promise<SubTask> {
-    const [newSubtask] = await db.insert(subtasks).values(subtask).returning();
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    const [newSubtask] = await db.insert(subtasks).values({
+      ...subtask,
+      completed: false
+    }).returning();
     return newSubtask;
   }
 
   async updateSubtask(id: number, completed: boolean): Promise<SubTask> {
-    const [subtask] = await db
-      .update(subtasks)
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    const [updatedSubtask] = await db.update(subtasks)
       .set({ completed })
       .where(eq(subtasks.id, id))
       .returning();
-    return subtask;
+    return updatedSubtask;
   }
 
   async deleteSubtask(id: number): Promise<void> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     await db.delete(subtasks).where(eq(subtasks.id, id));
   }
 
   async createBackup(backup: InsertBackup): Promise<Backup> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [newBackup] = await db.insert(backups).values(backup).returning();
     return newBackup;
   }
 
   async updateBackupStatus(id: number, status: string, error?: string): Promise<Backup> {
-    const [backup] = await db
-      .update(backups)
-      .set({
-        status,
-        completedAt: status === 'completed' ? new Date() : undefined,
-        error,
-      })
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    const data: any = { status };
+    
+    if (status === 'completed') {
+      data.completedAt = new Date();
+    }
+    
+    if (error) {
+      data.error = error;
+    }
+    
+    const [updatedBackup] = await db.update(backups)
+      .set(data)
       .where(eq(backups.id, id))
       .returning();
-    return backup;
+    return updatedBackup;
   }
 
   async getBackups(): Promise<Backup[]> {
-    return db
-      .select()
-      .from(backups)
-      .orderBy(desc(backups.createdAt));
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    return db.select().from(backups).orderBy(desc(backups.createdAt));
   }
 
   async getLatestBackup(): Promise<Backup | undefined> {
-    const [backup] = await db
-      .select()
-      .from(backups)
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    const [backup] = await db.select().from(backups)
       .where(eq(backups.status, 'completed'))
       .orderBy(desc(backups.createdAt))
       .limit(1);
@@ -588,14 +605,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPostComment(comment: { content: string; postId: number; userId: number }): Promise<PostComment> {
-    const [newComment] = await db
-      .insert(postComments)
-      .values(comment)
-      .returning();
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    const [newComment] = await db.insert(postComments).values({
+      ...comment,
+      createdAt: new Date()
+    }).returning();
     return newComment;
   }
 
   async deletePostComment(id: number): Promise<void> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     await db.delete(postComments).where(eq(postComments.id, id));
   }
 }

@@ -1,4 +1,4 @@
-import { db, pool } from './db';
+import { db, pool } from './db.js';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { migrate as pgMigrate } from 'drizzle-orm/neon-serverless/migrator';
 import { users, todos, subtasks, posts, newsletters, socialAccounts, postAccounts, postAnalytics, postComments, backups } from '@shared/schema';
@@ -64,10 +64,14 @@ export async function initializeDatabase() {
             );
           `);
           
-          const tableExists = checkTableExists && checkTableExists[0] ? checkTableExists[0].exists : false;
-          console.log("Users-Tabelle existiert:", tableExists);
+          // Sicherer Zugriff auf das Ergebnis
+          const exists = checkTableExists && Array.isArray(checkTableExists) && checkTableExists.length > 0 ? 
+                       checkTableExists[0] && typeof checkTableExists[0] === 'object' && 'exists' in checkTableExists[0] ? 
+                       checkTableExists[0].exists : false : false;
           
-          if (!tableExists && db) {
+          console.log("Users-Tabelle existiert:", exists);
+          
+          if (!exists && db) {
             console.log("Erstelle Tabellen...");
             
             // Erstelle die Tabellen manuell in der richtigen Reihenfolge
@@ -213,9 +217,11 @@ export async function initializeDatabase() {
                 SELECT * FROM users WHERE username = 'admin' LIMIT 1
               `);
               
-              if (adminUser && adminUser.length > 0) {
+              // Sicherer Zugriff auf das Ergebnis
+              if (adminUser && Array.isArray(adminUser) && adminUser.length > 0) {
                 const user = adminUser[0];
-                if (user && user.password && !user.password.includes('.')) {
+                if (user && typeof user === 'object' && 'password' in user && 
+                    typeof user.password === 'string' && !user.password.includes('.')) {
                   console.log("Admin-Benutzer hat kein gehashtes Passwort, aktualisiere...");
                   const hashedPassword = await hashPasswordLocal("admin123");
                   await db.execute(sql`
@@ -234,8 +240,8 @@ export async function initializeDatabase() {
         }
       } catch (dbConnError) {
         console.error("KRITISCHER FEHLER bei der PostgreSQL-Verbindung:", dbConnError);
-        console.error("Stack-Trace:", dbConnError.stack);
-        throw new Error(`PostgreSQL-Verbindungsfehler: ${dbConnError.message}`);
+        console.error("Stack-Trace:", dbConnError instanceof Error ? dbConnError.stack : String(dbConnError));
+        throw new Error(`PostgreSQL-Verbindungsfehler: ${dbConnError instanceof Error ? dbConnError.message : String(dbConnError)}`);
       }
     } else {
       // SQLite für lokale Entwicklung
@@ -248,7 +254,7 @@ export async function initializeDatabase() {
     return true;
   } catch (error) {
     console.error("KRITISCHER FEHLER bei der Datenbankinitialisierung:", error);
-    console.error("Stack-Trace:", error.stack);
+    console.error("Stack-Trace:", error instanceof Error ? error.stack : String(error));
     
     // Werfe den Fehler weiter, damit der Server fehlschlägt, wenn die Datenbankinitialisierung fehlschlägt
     throw error;
