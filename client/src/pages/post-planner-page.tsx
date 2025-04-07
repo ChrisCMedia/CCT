@@ -117,8 +117,10 @@ export default function PostPlannerPage() {
       formData.append("scheduledDate", data.scheduledDate.toISOString());
       
       if (data.accountIds.length > 0) {
-        formData.append("accountIds[]", data.accountIds[0].toString());
-        console.log("Account ID für Request:", data.accountIds[0]);
+        data.accountIds.forEach(id => {
+          formData.append("accountIds[]", id.toString());
+        });
+        console.log("Account IDs für Request:", data.accountIds);
       }
       
       if (data.image) {

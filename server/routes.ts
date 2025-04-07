@@ -9,7 +9,8 @@ import { insertNewsletterSchema, insertSocialAccountSchema } from "./shared/sche
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
-import { db } from "./db.js";
+import { db, executeDirectQuery } from "./db.js";
+import { mkdir, writeFile, readFile, unlink } from "fs/promises";
 
 const execAsync = promisify(exec);
 
@@ -310,8 +311,15 @@ export function registerRoutes(app: express.Application): Server {
             } catch (e) {
               // Versuche es mit dem accountIds[]-Format, das häufig bei FormData verwendet wird
               if (req.body['accountIds[]']) {
-                accountId = Number(req.body['accountIds[]']);
-                console.log("AccountId aus accountIds[]-Feld:", accountId);
+                // Verarbeite 'accountIds[]' als Array, falls es mehrere Einträge gibt
+                if (Array.isArray(req.body['accountIds[]'])) {
+                  accountId = Number(req.body['accountIds[]'][0]);
+                  console.log("AccountId aus accountIds[]-Array:", accountId);
+                } else {
+                  // Falls es ein einzelner Wert ist
+                  accountId = Number(req.body['accountIds[]']);
+                  console.log("AccountId aus accountIds[]-Feld:", accountId);
+                }
               } else {
                 // Falls es ein einzelner String ist, versuche ihn direkt zu konvertieren
                 accountId = Number(req.body.accountIds);
@@ -374,6 +382,28 @@ export function registerRoutes(app: express.Application): Server {
           
           const post = await storage.createPost(postData);
           console.log("Post erfolgreich erstellt:", post.id);
+          
+          // Wenn wir accountIds[] als Array haben, erstelle Einträge in der post_accounts Tabelle
+          // für alle weiteren Accounts (der erste wurde bereits beim Post gespeichert)
+          if (req.body['accountIds[]'] && Array.isArray(req.body['accountIds[]']) && req.body['accountIds[]'].length > 1) {
+            try {
+              // Starte bei Index 1, da der erste Account bereits im Post-Datensatz gespeichert ist
+              for (let i = 1; i < req.body['accountIds[]'].length; i++) {
+                const additionalAccountId = Number(req.body['accountIds[]'][i]);
+                if (!isNaN(additionalAccountId)) {
+                  await executeDirectQuery(
+                    'INSERT INTO post_accounts (post_id, account_id) VALUES ($1, $2)',
+                    [post.id, additionalAccountId]
+                  );
+                  console.log(`Zusätzlichen Account ${additionalAccountId} für Post ${post.id} verknüpft`);
+                }
+              }
+            } catch (postAccountError) {
+              console.error("Fehler beim Verknüpfen zusätzlicher Accounts:", postAccountError);
+              // Wir lassen den Fehler nicht zum Client durchdringen
+            }
+          }
+          
           res.json(post);
         } catch (dbError) {
           console.error("Datenbankfehler beim Erstellen des Posts:", dbError);
@@ -688,38 +718,22 @@ export function registerRoutes(app: express.Application): Server {
   // DB-Test-Route für einfaches Debugging
   app.get("/api/test-db", async (req, res) => {
     try {
-      console.log("DB-Test-Route aufgerufen");
+      console.log("DbTest-Endpunkt aufgerufen...");
       
-      // Teste Verbindung zu Neon
-      if (!db) {
-        console.error("DB ist nicht initialisiert");
-        return res.status(500).json({ 
-          success: false, 
-          error: "DB nicht initialisiert",
-          env: {
-            NODE_ENV: process.env.NODE_ENV,
-            HAS_DATABASE_URL: !!process.env.DATABASE_URL,
-            DATABASE_URL_START: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + "..." : "nicht gesetzt"
-          }
-        });
-      }
-
       // Einfache Abfrage ausführen
-      const result = await db.select().from(users).limit(1);
+      const testResult = await executeDirectQuery('SELECT id, username FROM users LIMIT 1');
+      const result = testResult.rows;
       
       // Antwort senden
-      return res.json({ 
-        success: true, 
-        message: "Datenbankverbindung funktioniert!",
-        hasUsers: result.length > 0,
-        firstUser: result.length > 0 ? { id: result[0].id, username: result[0].username } : null
+      res.json({
+        message: "Datenbankabfrage erfolgreich",
+        user: result && result.length > 0 ? result[0] : null
       });
     } catch (error) {
-      console.error("Fehler bei DB-Test:", error);
-      return res.status(500).json({ 
-        success: false, 
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
+      console.error("Fehler im DbTest-Endpunkt:", error);
+      res.status(500).json({ 
+        message: "Datenbankabfrage fehlgeschlagen",
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   });
