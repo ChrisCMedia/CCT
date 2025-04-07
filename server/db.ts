@@ -83,159 +83,132 @@ export async function testDB(): Promise<boolean> {
   }
 }
 
-// SQLite für lokale Entwicklung verwenden, wenn keine DATABASE_URL gesetzt ist
-let db;
-let pool = null;
+let db: ReturnType<typeof drizzle> | undefined = undefined;
+let pool: Pool | null = null;
 
 // Stelle sicher, dass die DATABASE_URL Umgebungsvariable existiert
 if (!process.env.DATABASE_URL) {
-  console.error("WARNUNG: DATABASE_URL ist nicht gesetzt! Verwende SQLite als Fallback.");
+  console.error("FATAL: DATABASE_URL environment variable is not set!");
+  throw new Error("DATABASE_URL environment variable is not set!");
 }
 
 try {
-  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('sqlite:')) {
-    console.log("Verbinde mit PostgreSQL-Datenbank...");
-    
-    // Verwende direkte URL für Vercel oder pooler für andere Umgebungen
-    const connectionString = process.env.VERCEL && process.env.DIRECT_URL ? 
-      process.env.DIRECT_URL : process.env.DATABASE_URL;
-    
-    console.log(`Verbindungstyp: ${process.env.VERCEL ? 'Direkte Verbindung (DIRECT_URL)' : 'Pooler (DATABASE_URL)'}`);
-    
-    // Maskierte URL-Anzeige
-    const urlParts = connectionString?.split('@');
-    if (urlParts && urlParts.length > 1) {
-      const hostPart = urlParts[1];
-      console.log("Verwendete Verbindungs-URL: postgresql://[username]:[password]@" + hostPart);
-    }
-    
-    // Füge einen Timeout für die Verbindung hinzu
-    console.log("Erstelle DB-Pool mit folgenden Optionen:");
-    console.log("- connectionTimeoutMillis: 30000");
-    console.log("- max Connections:", process.env.VERCEL ? 1 : 10);
-    console.log("- idleTimeoutMillis: 15000");
-    
-    pool = new Pool({ 
-      connectionString,
-      connectionTimeoutMillis: 30000, // 30 Sekunden Timeout
-      max: process.env.VERCEL ? 1 : 10, // Weniger Verbindungen auf Vercel
-      idleTimeoutMillis: 15000, // 15 Sekunden Timeout für idle Verbindungen
+  console.log("Connecting to PostgreSQL database...");
+  
+  // Use DATABASE_URL (Pooler) for all environments now, including Vercel
+  const connectionString = process.env.DATABASE_URL;
+  
+  console.log("Using connection type: Pooler (DATABASE_URL)");
+  
+  // Masked URL logging
+  const urlParts = connectionString?.split('@');
+  if (urlParts && urlParts.length > 1) {
+    const hostPart = urlParts[1];
+    console.log("Using connection URL: postgresql://[username]:[password]@" + hostPart);
+  }
+  
+  console.log("Creating DB pool with options:");
+  console.log("- connectionTimeoutMillis: 30000");
+  console.log("- max Connections:", process.env.VERCEL ? 1 : 10); // Fewer connections on Vercel
+  console.log("- idleTimeoutMillis: 15000");
+  
+  pool = new Pool({ 
+    connectionString,
+    connectionTimeoutMillis: 30000,
+    max: process.env.VERCEL ? 1 : 10, 
+    idleTimeoutMillis: 15000, 
+  });
+  
+  // Teste sofort die Verbindung mit Timeout
+  try {
+    console.log("Teste Datenbankverbindung...");
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Datenbankverbindungs-Timeout')), 10000);
     });
     
-    // Teste sofort die Verbindung mit Timeout
+    console.log("Führe Test-Query aus...");
+    const testResult = await Promise.race([
+      pool.query('SELECT 1 as test'),
+      timeoutPromise
+    ]);
+    
+    console.log("PostgreSQL-Verbindung erfolgreich getestet:", JSON.stringify(testResult));
+    
+    // Erstelle Admin-Benutzer wenn noch nicht vorhanden
     try {
-      console.log("Teste Datenbankverbindung...");
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Datenbankverbindungs-Timeout')), 10000);
-      });
+      console.log("Prüfe, ob Admin-Benutzer existiert...");
+      const adminCheck = await pool.query('SELECT * FROM users WHERE username = $1 LIMIT 1', ['admin']);
       
-      console.log("Führe Test-Query aus...");
-      const testResult = await Promise.race([
-        pool.query('SELECT 1 as test'),
-        timeoutPromise
-      ]);
-      
-      console.log("PostgreSQL-Verbindung erfolgreich getestet:", JSON.stringify(testResult));
-      
-      // Erstelle Admin-Benutzer wenn noch nicht vorhanden
-      try {
-        console.log("Prüfe, ob Admin-Benutzer existiert...");
-        const adminCheck = await pool.query('SELECT * FROM users WHERE username = $1 LIMIT 1', ['admin']);
+      if (adminCheck.rows.length === 0) {
+        console.log("Admin-Benutzer nicht gefunden, erstelle einen...");
         
-        if (adminCheck.rows.length === 0) {
-          console.log("Admin-Benutzer nicht gefunden, erstelle einen...");
+        const hashedPassword = await hashPassword('admin123');
+        
+        await pool.query(
+          'INSERT INTO users (username, password) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          ['admin', hashedPassword]
+        );
+        
+        console.log("Admin-Benutzer erfolgreich erstellt");
+      } else {
+        console.log("Admin-Benutzer existiert bereits");
+        
+        // Überprüfe, ob das Passwort gehashed ist
+        const user = adminCheck.rows[0];
+        if (!user.password.includes('.')) {
+          console.log("Admin-Passwort ist nicht gehashed, aktualisiere...");
           
           const hashedPassword = await hashPassword('admin123');
           
           await pool.query(
-            'INSERT INTO users (username, password) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            ['admin', hashedPassword]
+            'UPDATE users SET password = $1 WHERE username = $2',
+            [hashedPassword, 'admin']
           );
           
-          console.log("Admin-Benutzer erfolgreich erstellt");
-        } else {
-          console.log("Admin-Benutzer existiert bereits");
-          
-          // Überprüfe, ob das Passwort gehashed ist
-          const user = adminCheck.rows[0];
-          if (!user.password.includes('.')) {
-            console.log("Admin-Passwort ist nicht gehashed, aktualisiere...");
-            
-            const hashedPassword = await hashPassword('admin123');
-            
-            await pool.query(
-              'UPDATE users SET password = $1 WHERE username = $2',
-              [hashedPassword, 'admin']
-            );
-            
-            console.log("Admin-Passwort erfolgreich aktualisiert");
-          }
+          console.log("Admin-Passwort erfolgreich aktualisiert");
         }
-      } catch (adminError: any) {
-        console.error("Fehler beim Prüfen oder Erstellen des Admin-Benutzers:", adminError.message);
       }
-    } catch (connError: any) {
-      console.error("PostgreSQL-Verbindungstest fehlgeschlagen:");
-      console.error("Fehlertyp:", typeof connError);
-      console.error("Fehlermeldung:", connError.message);
-      console.error("Stack:", connError.stack);
-      
-      if (connError.code) {
-        console.error("Fehlercode:", connError.code);
-      }
-      
-      throw new Error(`Datenbankverbindungsfehler: ${connError.message}`);
+    } catch (adminError: any) {
+      console.error("Fehler beim Prüfen oder Erstellen des Admin-Benutzers:", adminError.message);
+    }
+  } catch (connError: any) {
+    console.error("PostgreSQL-Verbindungstest fehlgeschlagen:");
+    console.error("Fehlertyp:", typeof connError);
+    console.error("Fehlermeldung:", connError.message);
+    console.error("Stack:", connError.stack);
+    
+    if (connError.code) {
+      console.error("Fehlercode:", connError.code);
     }
     
-    console.log("Initialisiere Drizzle ORM mit Pool...");
-    db = drizzle({ client: pool, schema });
-    console.log("PostgreSQL-Verbindung vollständig initialisiert");
-    
-    // Direkte Testquery mit Drizzle
-    try {
-      console.log("Teste Drizzle ORM...");
-      const result = await db.select().from(schema.users).limit(1);
-      console.log("Drizzle ORM Test erfolgreich, Benutzer gefunden:", result.length > 0);
-    } catch (drizzleError: any) {
-      console.error("Drizzle ORM Test fehlgeschlagen:", drizzleError.message);
-      console.error("Stack:", drizzleError.stack);
-    }
-  } else {
-    console.log("Verwende SQLite für lokale Entwicklung");
-    
-    // SQLite-Datei-Pfad
-    const dbPath = process.env.DATABASE_URL?.replace('sqlite:', '') || './local_dev.db';
-    console.log("SQLite Pfad:", dbPath);
-    
-    // Stelle sicher, dass das Verzeichnis existiert
-    const dir = dirname(dbPath);
-    if (!existsSync(dir)) {
-      console.log("Erstelle Verzeichnis:", dir);
-      mkdirSync(dir, { recursive: true });
-    }
-    
-    // Initialisiere SQLite
-    console.log("Initialisiere SQLite...");
-    const sqlite = new Database(dbPath);
-    db = drizzleSQLite(sqlite, { schema });
-    console.log("SQLite-Verbindung initialisiert:", dbPath);
+    throw new Error(`Datenbankverbindungsfehler: ${connError.message}`);
+  }
+  
+  console.log("Initialisiere Drizzle ORM mit Pool...");
+  db = drizzle({ client: pool, schema });
+  console.log("PostgreSQL-Verbindung vollständig initialisiert");
+  
+  // Direkte Testquery mit Drizzle
+  try {
+    console.log("Teste Drizzle ORM...");
+    const result = await db.select().from(schema.users).limit(1);
+    console.log("Drizzle ORM Test erfolgreich, Benutzer gefunden:", result.length > 0);
+  } catch (drizzleError: any) {
+    console.error("Drizzle ORM Test fehlgeschlagen:", drizzleError.message);
+    console.error("Stack:", drizzleError.stack);
   }
 } catch (error: any) {
-  console.error("KRITISCHER FEHLER bei der Datenbankinitialisierung:");
-  console.error("Fehlertyp:", typeof error);
-  console.error("Fehlermeldung:", error.message);
-  console.error("Stack-Trace:", error.stack);
+  console.error("CRITICAL ERROR during database initialization:");
+  console.error("Error Type:", typeof error);
+  console.error("Error Message:", error.message);
+  console.error("Stack Trace:", error.stack);
   
   if (error.code) {
-    console.error("Fehlercode:", error.code);
+    console.error("Error Code:", error.code);
   }
   
-  // Sicherheits-Fallback zu SQLite, wenn PostgreSQL-Verbindung fehlschlägt
-  if (!db) {
-    console.log("Verwende SQLite als NOTFALL-Fallback");
-    const sqlite = new Database('./emergency_fallback.db');
-    db = drizzleSQLite(sqlite, { schema });
-  }
+  // No SQLite fallback anymore, re-throw the error
+  throw error; 
 }
 
 console.log("--- DB VERBINDUNGS-DEBUG ENDE ---");
