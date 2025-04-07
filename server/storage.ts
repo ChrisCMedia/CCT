@@ -1,10 +1,10 @@
 import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup, postComments, PostComment, InsertPostComment } from "@shared/schema";
-import { db } from "./db";
+import { db } from "./db.js";
 import { eq, asc, isNotNull, isNull, desc, and, or, sql, gt, gte, lt, lte, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import memorystore from 'memorystore';
-import { pool } from "./db";
+import { pool } from "./db.js";
 
 // Session-Store Konfiguration
 let sessionStore: session.Store;
@@ -138,25 +138,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUsers(): Promise<User[]> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     return db.select().from(users);
   }
 
   async getUser(id: number): Promise<User | undefined> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [user] = await db.select().from(users).where(eq(users.username, username));
     return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async getTodos(): Promise<(Todo & { subtasks: SubTask[]; assignedTo?: User })[]> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const result = await db
       .select({
         todo: todos,
@@ -194,15 +199,19 @@ export class DatabaseStorage implements IStorage {
     subtasks?: string[];
     assignedToUserId?: number;
   }): Promise<Todo> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const { subtasks: subtaskTitles, ...todoData } = todo;
     const [newTodo] = await db.insert(todos).values(todoData).returning();
 
     if (subtaskTitles?.length) {
-      await db.insert(subtasks).values(
-        subtaskTitles.map(title => ({
-          title,
-          todoId: newTodo.id,
-        }))
+      await Promise.all(
+        subtaskTitles.map(title =>
+          db!.insert(subtasks).values({
+            title,
+            todoId: newTodo.id,
+            completed: false,
+          })
+        )
       );
     }
 
@@ -227,72 +236,73 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]> {
-    try {
-      console.log("Rufe Posts aus der Datenbank ab...");
-      const result = await db
-        .select({
-          post: posts,
-          account: socialAccounts,
-          lastEditedBy: users,
-        })
-        .from(posts)
-        .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
-        .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
-        .where(isNull(posts.deletedAt))
-        .orderBy(desc(posts.scheduledDate));
-
-      console.log(`${result.length} Posts gefunden`);
-
-      // Falls keine Posts existieren, erstelle einen Beispiel-Post
-      if (result.length === 0) {
-        try {
-          console.log("Keine Posts gefunden, versuche Beispiel-Post zu erstellen");
-          // Überprüfe, ob wir einen Benutzer und ein Konto haben
-          const [account] = await db.select().from(socialAccounts).limit(1);
-          const [user] = await db.select().from(users).limit(1);
-          
-          if (account && user) {
-            console.log(`Erstelle Beispiel-Post mit Benutzer ${user.id} und Account ${account.id}`);
-            // Erstelle einen Beispiel-Post
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            
-            const examplePost = {
-              content: "Dies ist ein Beispiel-Post, um zu zeigen, wie Posts funktionieren.",
-              scheduledDate: tomorrow,
-              userId: user.id,
-              accountId: account.id,
-              imageUrl: null
-            };
-            
-            await this.createPost(examplePost);
-            console.log("Beispiel-Post erfolgreich erstellt");
-            
-            // Hole die aktualisierten Posts
-            return this.getPosts();
-          } else {
-            console.log("Kein Benutzer oder Account gefunden für Beispiel-Post");
-          }
-        } catch (error) {
-          console.error("Fehler beim Erstellen des Beispiel-Posts:", error);
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    
+    const result = await db
+      .select({
+        id: posts.id,
+        userId: posts.userId,
+        content: posts.content,
+        imageUrl: posts.imageUrl,
+        scheduledDate: posts.scheduledDate,
+        approved: posts.approved,
+        accountId: posts.accountId,
+        lastEditedAt: posts.lastEditedAt,
+        lastEditedByUserId: posts.lastEditedByUserId,
+        platformPostId: posts.platformPostId,
+        visibility: posts.visibility,
+        articleUrl: posts.articleUrl,
+        postType: posts.postType,
+        publishStatus: posts.publishStatus,
+        failureReason: posts.failureReason,
+        deletedAt: posts.deletedAt,
+        scheduledInLinkedIn: posts.scheduledInLinkedIn,
+        account: {
+          id: socialAccounts.id,
+          platform: socialAccounts.platform,
+          accountName: socialAccounts.accountName,
+          userId: socialAccounts.userId,
+          accessToken: socialAccounts.accessToken,
+          refreshToken: socialAccounts.refreshToken,
+          tokenExpiresAt: socialAccounts.tokenExpiresAt,
+          platformUserId: socialAccounts.platformUserId,
+          platformPageId: socialAccounts.platformPageId
+        },
+        lastEditedBy: {
+          id: users.id,
+          username: users.username,
+          password: users.password
         }
-      }
-
-      // Stelle sicher, dass für jeden Post ein Account vorhanden ist
-      const validPosts = result.filter(item => item.account !== null);
-      if (validPosts.length < result.length) {
-        console.warn(`${result.length - validPosts.length} Posts haben keinen gültigen Account und werden ausgelassen`);
-      }
-
-      return validPosts.map(({ post, account, lastEditedBy }) => ({
+      })
+      .from(posts)
+      .leftJoin(socialAccounts, eq(posts.accountId, socialAccounts.id))
+      .leftJoin(users, eq(posts.lastEditedByUserId, users.id))
+      .where(isNull(posts.deletedAt))
+      .orderBy(asc(posts.scheduledDate));
+      
+    // Wir müssen den Typ explizit umwandeln, um Typkonflikte zu vermeiden
+    return result.map(post => {
+      // Wenn lastEditedBy null ist, setzen wir es auf undefined
+      const lastEditedBy = post.lastEditedBy && post.lastEditedBy.id ? post.lastEditedBy : undefined;
+      // Wenn account null ist, erzeugen wir ein leeres SocialAccount-Objekt
+      const account = post.account || {
+        id: 0,
+        platform: "",
+        accountName: "",
+        userId: 0,
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiresAt: null,
+        platformUserId: null,
+        platformPageId: null
+      };
+      
+      return {
         ...post,
         account,
-        lastEditedBy: lastEditedBy || undefined,
-      }));
-    } catch (error) {
-      console.error("Fehler beim Abrufen der Posts:", error);
-      return [];
-    }
+        lastEditedBy
+      } as (Post & { account: SocialAccount; lastEditedBy?: User });
+    });
   }
 
   async getPost(id: number): Promise<Post | undefined> {
@@ -554,23 +564,27 @@ export class DatabaseStorage implements IStorage {
 
   // Implementierung der Kommentar-Funktionen
   async getPostComments(postId: number): Promise<(PostComment & { user: User })[]> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
+    
     const result = await db
       .select({
-        comment: postComments,
+        id: postComments.id,
+        content: postComments.content,
+        postId: postComments.postId,
+        userId: postComments.userId,
+        createdAt: postComments.createdAt,
         user: {
           id: users.id,
-          username: users.username
+          username: users.username,
+          password: users.password
         }
       })
       .from(postComments)
       .innerJoin(users, eq(postComments.userId, users.id))
       .where(eq(postComments.postId, postId))
       .orderBy(asc(postComments.createdAt));
-
-    return result.map(({ comment, user }) => ({
-      ...comment,
-      user
-    }));
+    
+    return result as (PostComment & { user: User })[];
   }
 
   async createPostComment(comment: { content: string; postId: number; userId: number }): Promise<PostComment> {
@@ -583,82 +597,6 @@ export class DatabaseStorage implements IStorage {
 
   async deletePostComment(id: number): Promise<void> {
     await db.delete(postComments).where(eq(postComments.id, id));
-  }
-
-  async getSocialAccounts(userId: number) {
-    // Original-Funktion wiederherstellen
-    try {
-      const accounts = await db.select().from(socialAccounts).where(eq(socialAccounts.userId, userId));
-      return accounts;
-    } catch (error) {
-      console.error("Fehler beim Abrufen der Social-Media-Konten:", error);
-      return [];
-    }
-  }
-
-  async getSocialAccountById(id: number) {
-    // Original-Funktion wiederherstellen
-    try {
-      const result = await db.select().from(socialAccounts).where(eq(socialAccounts.id, id)).limit(1);
-      return result.length > 0 ? result[0] : null;
-    } catch (error) {
-      console.error("Fehler beim Abrufen des Social-Media-Kontos:", error);
-      return null;
-    }
-  }
-
-  async createSocialAccount(data: any) {
-    // Original-Funktion wiederherstellen
-    return db.insert(socialAccounts).values(data).returning().then(res => res[0]);
-  }
-
-  async updateSocialAccount(id: number, data: any) {
-    // Original-Funktion wiederherstellen
-    return db.update(socialAccounts).set(data).where(eq(socialAccounts.id, id)).returning().then(res => res[0]);
-  }
-
-  async deleteSocialAccount(id: number) {
-    // Original-Funktion wiederherstellen
-    await db.delete(socialAccounts).where(eq(socialAccounts.id, id));
-    return true;
-  }
-
-  async getPosts(userId: number) {
-    // Original-Funktion wiederherstellen
-    try {
-      const userPosts = await db.select().from(posts).where(eq(posts.userId, userId));
-      return userPosts;
-    } catch (error) {
-      console.error("Fehler beim Abrufen der Beiträge:", error);
-      return [];
-    }
-  }
-
-  async getPostById(id: number) {
-    // Original-Funktion wiederherstellen
-    try {
-      const result = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
-      return result.length > 0 ? result[0] : null;
-    } catch (error) {
-      console.error("Fehler beim Abrufen des Beitrags:", error);
-      return null;
-    }
-  }
-
-  async createPost(data: any) {
-    // Original-Funktion wiederherstellen
-    return db.insert(posts).values(data).returning().then(res => res[0]);
-  }
-
-  async updatePost(id: number, data: any) {
-    // Original-Funktion wiederherstellen
-    return db.update(posts).set(data).where(eq(posts.id, id)).returning().then(res => res[0]);
-  }
-
-  async deletePost(id: number) {
-    // Original-Funktion wiederherstellen
-    await db.delete(posts).where(eq(posts.id, id));
-    return true;
   }
 }
 

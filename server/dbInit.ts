@@ -6,12 +6,12 @@ import { sql } from 'drizzle-orm';
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
 import { Pool } from "@neondatabase/serverless";
-import { hashPassword } from "./auth";
+import { hashPassword } from "./auth.js";
 
 // Funktion zum Hashen von Passwörtern (kopiert aus auth.ts)
 const scryptAsync = promisify(scrypt);
 
-async function hashPassword(password: string) {
+async function hashPasswordLocal(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
   return `${buf.toString("hex")}.${salt}`;
@@ -38,6 +38,10 @@ export async function initializeDatabase() {
         });
         
         try {
+          if (!db) {
+            throw new Error('Datenbank-Objekt ist nicht initialisiert');
+          }
+          
           const testConnection = await Promise.race([
             db.execute(sql`SELECT 1 as test`),
             timeoutPromise
@@ -46,10 +50,10 @@ export async function initializeDatabase() {
           connectionSuccessful = true;
         } catch (connError) {
           console.error("Fehler bei der Datenbankverbindung:", connError);
-          throw new Error(`Datenbankverbindungsfehler: ${connError.message}`);
+          throw new Error(`Datenbankverbindungsfehler: ${connError instanceof Error ? connError.message : String(connError)}`);
         }
         
-        if (connectionSuccessful) {
+        if (connectionSuccessful && db) {
           // Prüfe, ob die users-Tabelle existiert
           console.log("Prüfe, ob die Tabellen bereits existieren...");
           const checkTableExists = await db.execute(sql`
@@ -60,10 +64,10 @@ export async function initializeDatabase() {
             );
           `);
           
-          const tableExists = checkTableExists[0]?.exists;
+          const tableExists = checkTableExists && checkTableExists[0] ? checkTableExists[0].exists : false;
           console.log("Users-Tabelle existiert:", tableExists);
           
-          if (!tableExists) {
+          if (!tableExists && db) {
             console.log("Erstelle Tabellen...");
             
             // Erstelle die Tabellen manuell in der richtigen Reihenfolge
@@ -182,15 +186,17 @@ export async function initializeDatabase() {
             console.log("Erstelle Demo-Benutzer...");
             try {
               // Erstelle ein gehashtes Passwort für den Admin-Benutzer
-              const hashedPassword = await hashPassword("admin123");
+              const hashedPassword = await hashPasswordLocal("admin123");
               console.log("Admin-Passwort gehasht:", hashedPassword);
               
-              await db.execute(sql`
-                INSERT INTO users (username, password)
-                VALUES ('admin', ${hashedPassword})
-                ON CONFLICT (username) DO NOTHING;
-              `);
-              console.log("Demo-Benutzer erfolgreich erstellt oder existierte bereits");
+              if (db) {
+                await db.execute(sql`
+                  INSERT INTO users (username, password)
+                  VALUES ('admin', ${hashedPassword})
+                  ON CONFLICT (username) DO NOTHING;
+                `);
+                console.log("Demo-Benutzer erfolgreich erstellt oder existierte bereits");
+              }
             } catch (userError) {
               console.error("Fehler beim Erstellen des Demo-Benutzers:", userError);
             }
@@ -199,15 +205,19 @@ export async function initializeDatabase() {
             
             // Überprüfe, ob der Admin-Benutzer ein gehashtes Passwort hat
             try {
+              if (!db) {
+                throw new Error('Datenbank-Objekt ist nicht initialisiert');
+              }
+              
               const adminUser = await db.execute(sql`
                 SELECT * FROM users WHERE username = 'admin' LIMIT 1
               `);
               
-              if (adminUser.length > 0) {
+              if (adminUser && adminUser.length > 0) {
                 const user = adminUser[0];
-                if (!user.password.includes('.')) {
+                if (user && user.password && !user.password.includes('.')) {
                   console.log("Admin-Benutzer hat kein gehashtes Passwort, aktualisiere...");
-                  const hashedPassword = await hashPassword("admin123");
+                  const hashedPassword = await hashPasswordLocal("admin123");
                   await db.execute(sql`
                     UPDATE users SET password = ${hashedPassword} 
                     WHERE username = 'admin'

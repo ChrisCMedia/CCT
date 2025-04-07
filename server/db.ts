@@ -6,7 +6,7 @@ import ws from "ws";
 import * as schema from "@shared/schema";
 import { existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { hashPassword } from './auth';
+import { hashPassword } from './auth.js';
 
 // DEBUG: Log der Umgebungsvariablen (teilweise maskiert)
 console.log("--- DB VERBINDUNGS-DEBUG START ---");
@@ -37,7 +37,7 @@ if (process.env.DIRECT_URL) {
 console.log("Konfiguriere neonConfig...");
 neonConfig.webSocketConstructor = ws;
 // Proxy für WebSockets aktivieren (nur für Vercel)
-const wsProxy = process.env.VERCEL === 'true' || process.env.VERCEL === '1' ? true : undefined;
+const wsProxy = process.env.VERCEL === 'true' || process.env.VERCEL === '1' ? process.env.VERCEL_URL || true : undefined;
 console.log("WebSocket Proxy aktiviert:", wsProxy);
 neonConfig.wsProxy = wsProxy;
 
