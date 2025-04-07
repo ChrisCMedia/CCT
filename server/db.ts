@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/neon-serverless';
 import { drizzle as drizzleSQLite } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
 import ws from "ws";
-import * as schema from "@shared/schema";
+import * as schema from "../shared/schema.js";
 import { existsSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { hashPassword } from './auth.js';

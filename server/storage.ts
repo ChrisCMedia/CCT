@@ -1,4 +1,4 @@
-import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup, postComments, PostComment, InsertPostComment } from "@shared/schema";
+import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newsletters, socialAccounts, postAccounts, postAnalytics, type SocialAccount, type InsertSocialAccount, subtasks, SubTask, backups, Backup, InsertBackup, postComments, PostComment, InsertPostComment } from "../shared/schema.js";
 import { db } from "./db.js";
 import { eq, asc, isNotNull, isNull, desc, and, or, sql, gt, gte, lt, lte, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -223,6 +223,7 @@ export class DatabaseStorage implements IStorage {
     deadline?: Date;
     assignedToUserId?: number;
   }): Promise<Todo> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [todo] = await db
       .update(todos)
       .set(data)
@@ -232,6 +233,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteTodo(id: number): Promise<void> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     await db.delete(todos).where(eq(todos.id, id));
   }
 
@@ -306,6 +308,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPost(id: number): Promise<Post | undefined> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [post] = await db.select().from(posts).where(eq(posts.id, id));
     
     if (post) {
@@ -318,6 +321,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPost(post: { content: string; scheduledDate: Date; userId: number; accountId: number; imageUrl?: string }): Promise<Post> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [newPost] = await db.insert(posts).values({
       ...post,
       imageUrl: post.imageUrl,
@@ -338,6 +342,7 @@ export class DatabaseStorage implements IStorage {
     articleUrl?: string;
     scheduledInLinkedIn?: boolean;
   }): Promise<Post> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [post] = await db
       .update(posts)
       .set({
@@ -360,6 +365,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async approvePost(id: number): Promise<Post> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [post] = await db
       .update(posts)
       .set({ approved: true })
@@ -369,6 +375,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async unapprovePost(id: number): Promise<Post> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [post] = await db
       .update(posts)
       .set({ approved: false })
@@ -378,6 +385,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deletePost(id: number): Promise<void> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     await db
       .update(posts)
       .set({ 
@@ -388,6 +396,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async restorePost(id: number): Promise<Post> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [post] = await db
       .update(posts)
       .set({ 
@@ -400,6 +409,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDeletedPosts(): Promise<(Post & { account: SocialAccount; lastEditedBy?: User })[]> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const result = await db.select({
       post: posts,
       account: socialAccounts,
@@ -419,15 +429,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNewsletters(): Promise<Newsletter[]> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     return db.select().from(newsletters);
   }
 
   async createNewsletter(newsletter: { title: string; content: string; userId: number }): Promise<Newsletter> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [newNewsletter] = await db.insert(newsletters).values(newsletter).returning();
     return newNewsletter;
   }
 
   async updateNewsletter(id: number, data: { title: string; content: string }): Promise<Newsletter> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [newsletter] = await db
       .update(newsletters)
       .set(data)
@@ -437,14 +450,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteNewsletter(id: number): Promise<void> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     await db.delete(newsletters).where(eq(newsletters.id, id));
   }
 
   async getSocialAccounts(): Promise<SocialAccount[]> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     return db.select().from(socialAccounts);
   }
 
   async getSocialAccount(id: number): Promise<SocialAccount | undefined> {
+    if (!db) throw new Error('Datenbank nicht initialisiert');
     const [account] = await db
       .select()
       .from(socialAccounts)

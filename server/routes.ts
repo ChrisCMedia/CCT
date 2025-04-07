@@ -4,7 +4,7 @@ import { storage } from "./storage.js";
 import multer from "multer";
 import path from "path";
 import express from "express";
-import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema } from "@shared/schema";
+import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema } from "../shared/schema.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
