@@ -2,15 +2,14 @@ import { InsertUser, User, Todo, Post, Newsletter, users, todos, posts, newslett
 import { db } from "./db.js";
 import { eq, asc, isNotNull, isNull, desc, and, or, sql, gt, gte, lt, lte, inArray } from "drizzle-orm";
 import session from "express-session";
-import connectPg from "connect-pg-simple";
 import memorystore from 'memorystore';
 import { pool } from "./db.js";
 
 // Session-Store Konfiguration
 let sessionStore: session.Store;
 
-// Verwende immer MemoryStore für Debugging
-console.log("Verwende Memory Session-Store für Debugging");
+// Verwende immer MemoryStore, um Berechtigungsprobleme mit der user_sessions Tabelle zu vermeiden
+console.log("Verwende Memory Session-Store");
 const MemoryStore = memorystore(session);
 sessionStore = new MemoryStore({
   checkPeriod: 86400000 // Bereinige abgelaufene Einträge alle 24h

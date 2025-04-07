@@ -46,12 +46,14 @@ export async function comparePasswords(
 export function setupAuth(app: Express, instanceStorage = storage) {
   console.log("Konfiguriere Authentifizierung...");
 
+  // Verwende ausschließlich MemoryStore für Sessions, um Berechtigungsprobleme mit der user_sessions Tabelle zu umgehen
+  const MemoryStore = session.MemoryStore;
+  
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'entwicklungsgeheimnis123',
     resave: false,
     saveUninitialized: false,
-    // !! DIAGNOSE: Temporär auf MemoryStore umgestellt
-    store: new session.MemoryStore(), 
+    store: new MemoryStore(),  // Verwende immer MemoryStore, um das Berechtigungsproblem zu umgehen
     cookie: {
       secure: app.get("env") === "production" ? true : false,
       httpOnly: true,

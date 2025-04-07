@@ -174,14 +174,6 @@ export async function initializeDatabase() {
                 completed_at TIMESTAMP,
                 error TEXT
               );
-              
-              CREATE TABLE IF NOT EXISTS user_sessions (
-                sid TEXT PRIMARY KEY,
-                sess JSON NOT NULL,
-                expire TIMESTAMP(6) NOT NULL
-              );
-              
-              CREATE INDEX IF NOT EXISTS idx_user_sessions_expire ON user_sessions (expire);
             `);
             
             console.log("Datenbanktabellen erfolgreich erstellt");
