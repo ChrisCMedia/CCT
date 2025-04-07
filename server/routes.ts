@@ -4,7 +4,7 @@ import { storage } from "./storage.js";
 import multer from "multer";
 import path from "path";
 import express from "express";
-import { insertTodoSchema, insertPostSchema, insertNewsletterSchema, insertSocialAccountSchema, users } from "./shared/schema.js";
+import { users } from "./shared/schema-basic.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
@@ -85,22 +85,27 @@ export function registerRoutes(app: express.Application): Server {
   });
 
   app.post("/api/todos", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: 'Nicht angemeldet' });
+    }
+    
     try {
-      const parsed = insertTodoSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json(parsed.error);
-
+      // Einfache Validierung
+      if (!req.body.title) {
+        return res.status(400).json({ message: 'Titel ist erforderlich' });
+      }
+      
+      // Füge den Benutzer zur Todo hinzu
       const todoData = {
-        ...parsed.data,
-        userId: req.user.id,
-        deadline: parsed.data.deadline ? new Date(parsed.data.deadline) : undefined,
+        ...req.body,
+        userId: (req.user as any).id
       };
-
-      const todo = await storage.createTodo(todoData);
-      res.json(todo);
+      
+      const newTodo = await storage.createTodo(todoData);
+      return res.status(201).json(newTodo);
     } catch (error) {
-      console.error("Error creating todo:", error);
-      res.status(500).json({ message: "Failed to create todo" });
+      console.error('Fehler beim Erstellen eines Todos:', error);
+      return res.status(500).json({ message: 'Fehler beim Erstellen eines Todos' });
     }
   });
 
