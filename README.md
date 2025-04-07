@@ -53,4 +53,11 @@ npx drizzle-kit push
 ```
 
 ### 4. Genießen Sie Ihre bereitgestellte Anwendung!
-Ihre Anwendung sollte nun auf der von Vercel bereitgestellten URL verfügbar sein. 
+Ihre Anwendung sollte nun auf der von Vercel bereitgestellten URL verfügbar sein.
+
+# Client Communication Tool
+
+Ein Tool zur Verwaltung von Kundenkommunikation und Social Media Postings.
+
+## Datenbankverbindung aktualisiert
+Die Anwendung ist jetzt mit einem speziellen Datenbankbenutzer konfiguriert für verbesserte Sicherheit. 
