@@ -60,7 +60,7 @@ export async function initializeDatabase() {
             }
           } catch (migrationError) {
             console.error("Fehler beim Ausführen der Drizzle-Migrationen:", migrationError);
-            // Fahre fort, auch wenn die Migration fehlschlägt, da die Tabelle möglicherweise bereits aktuell ist
+            throw migrationError;
           }
           
           // Erstelle Demo-Benutzer nach der Migration
