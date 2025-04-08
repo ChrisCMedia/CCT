@@ -363,8 +363,8 @@ export function registerRoutes(app: express.Application): Server {
           content: req.body.content,
           scheduledDate: scheduledDate,
           accountId: accountId,
-          imageData: imageData, // Base64-Bild in der Datenbank speichern statt Dateipfad
-          userId: req.user.id,
+          imageData: imageData ?? undefined,
+          userId: (req.user as any).id,
         };
 
         console.log("Erstelle Post mit Daten:", { 
@@ -408,17 +408,29 @@ export function registerRoutes(app: express.Application): Server {
         } catch (dbError) {
           console.error("Datenbankfehler beim Erstellen des Posts:", dbError);
           
-          // Detailliertere Fehlerinformationen erfassen
+          // Detailliertere Fehlerinformationen erfassen (mit Typ-Prüfung)
+          let errorCode: string | undefined = undefined;
+          let sqlState: string | undefined = undefined;
+          let hint: string | undefined = undefined;
+          let errorPosition: string | undefined = undefined;
+
+          if (dbError && typeof dbError === 'object') {
+            if ('code' in dbError) errorCode = String(dbError.code);
+            if ('sqlState' in dbError) sqlState = String(dbError.sqlState);
+            if ('hint' in dbError) hint = String(dbError.hint);
+            if ('position' in dbError) errorPosition = String(dbError.position);
+          }
+
           const errorInfo = {
-            message: "Der Post konnte nicht erstellt werden", 
+            message: "Der Post konnte nicht erstellt werden",
             error: dbError instanceof Error ? dbError.message : String(dbError),
             details: "Datenbankfehler beim Speichern des Posts",
-            code: dbError.code,
-            sqlState: dbError.sqlState,
-            hint: dbError.hint,
-            errorPosition: dbError.position
+            code: errorCode,
+            sqlState: sqlState,
+            hint: hint,
+            errorPosition: errorPosition
           };
-          
+
           console.error("Vollständige Fehlerinformationen:", JSON.stringify(errorInfo, null, 2));
           
           return res.status(500).json(errorInfo);
@@ -466,8 +478,8 @@ export function registerRoutes(app: express.Application): Server {
           return res.status(404).json({ message: "Post nicht gefunden" });
         }
 
-        let imageUrl = existingPost.imageUrl;
-        let imageData = existingPost.imageData;
+        let imageUrl: string | undefined = existingPost.imageUrl ?? undefined;
+        let imageData: string | undefined = existingPost.imageData ?? undefined;
         
         if (req.file) {
           // Konvertiere das Bild in einen Base64-String
@@ -475,7 +487,7 @@ export function registerRoutes(app: express.Application): Server {
           const fileType = req.file.mimetype;
           const base64Image = fileBuffer.toString('base64');
           imageData = `data:${fileType};base64,${base64Image}`;
-          imageUrl = null; // Setze imageUrl auf null, da wir jetzt imageData verwenden
+          imageUrl = undefined;
           console.log("Neues Bild als Base64 konvertiert für Post-Update");
         }
 
@@ -484,7 +496,7 @@ export function registerRoutes(app: express.Application): Server {
 
         const post = await storage.updatePost(Number(req.params.id), {
           content: req.body.content,
-          userId: req.user.id,
+          userId: (req.user as any).id,
           scheduledDate: req.body.scheduledDate ? new Date(req.body.scheduledDate) : undefined,
           accountId: req.body.accountId ? Number(req.body.accountId) : undefined,
           imageUrl,
@@ -553,7 +565,7 @@ export function registerRoutes(app: express.Application): Server {
       const comment = await storage.createPostComment({
         content: req.body.content,
         postId: Number(req.params.id),
-        userId: req.user.id,
+        userId: (req.user as any).id,
       });
       res.json(comment);
     } catch (error) {
