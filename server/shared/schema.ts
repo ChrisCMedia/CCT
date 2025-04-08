@@ -117,6 +117,7 @@ export const posts = pgTable("posts", {
   id: serial("id").primaryKey(),
   content: text("content").notNull(),
   imageUrl: text("image_url"),
+  imageData: text("image_data"),
   scheduledDate: timestamp("scheduled_date").notNull(),
   approved: boolean("approved").notNull().default(false),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
