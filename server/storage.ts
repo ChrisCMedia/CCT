@@ -66,8 +66,8 @@ export interface IStorage {
     userId: number;
     scheduledDate?: Date;
     accountId?: number;
-    imageUrl?: string;
-    imageData?: string;
+    imageUrl?: string | null;
+    imageData?: string | null;
     platformPostId?: string;
     publishStatus?: string;
     visibility?: string;
@@ -348,12 +348,16 @@ export class DatabaseStorage implements IStorage {
         scheduledDate: post.scheduledDate,
         userId: post.userId,
         accountId: post.accountId,
-        imageUrl: post.imageUrl,
         lastEditedAt: new Date(),
         lastEditedByUserId: post.userId,
       };
       
-      // Füge imageData nur hinzu, wenn die Spalte existiert
+      // Füge imageUrl hinzu, wenn es vorhanden ist
+      if (post.imageUrl) {
+        insertData.imageUrl = post.imageUrl;
+      }
+      
+      // Füge imageData nur hinzu, wenn die Spalte existiert und Daten vorhanden sind
       if (hasImageData && post.imageData) {
         insertData.imageData = post.imageData;
         console.log("Füge imageData zum Post hinzu (Länge):", post.imageData.length);
@@ -363,6 +367,7 @@ export class DatabaseStorage implements IStorage {
       }
       
       // Führe den Insert aus
+      console.log("Führe Post-Insert mit folgenden Daten aus:", Object.keys(insertData).join(", "));
       const [newPost] = await db.insert(posts).values(insertData).returning();
       
       // Logge den neuen Post zur Fehlersuche
@@ -402,8 +407,8 @@ export class DatabaseStorage implements IStorage {
     userId: number;
     scheduledDate?: Date;
     accountId?: number;
-    imageUrl?: string;
-    imageData?: string;
+    imageUrl?: string | null;
+    imageData?: string | null;
     platformPostId?: string;
     publishStatus?: string;
     visibility?: string;
@@ -417,9 +422,11 @@ export class DatabaseStorage implements IStorage {
       // Prüfe, ob image_data in der Datenbank existiert
       const hasImageData = await this.checkIfColumnExists('posts', 'image_data');
       
-      // Aktualisiere last_edited_at und last_edited_by_user_id
+      // Konvertiere null zu undefined für TypeScript-Kompatibilität
       const updateData: any = {
         ...data,
+        imageUrl: data.imageUrl === null ? undefined : data.imageUrl,
+        imageData: data.imageData === null ? undefined : data.imageData,
         lastEditedAt: new Date(),
         lastEditedByUserId: data.userId
       };
@@ -430,6 +437,7 @@ export class DatabaseStorage implements IStorage {
         delete updateData.imageData;
       }
       
+      console.log("Aktualisiere Post mit folgenden Feldern:", Object.keys(updateData).join(", "));
       const [updatedPost] = await db.update(posts)
         .set(updateData)
         .where(eq(posts.id, id))

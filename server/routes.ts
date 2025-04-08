@@ -89,14 +89,11 @@ const upload = multer({
   },
 });
 
-// Globaler Multer-Fehlerhandler
-const handleMulterError = (err, req, res, next) => {
+// Multer-Middleware mit Fehlerbehandlung
+const handleMulterError = (err: Error | null, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err instanceof multer.MulterError) {
-    // Multer-spezifischer Fehler
+    // MulterError-spezifische Fehler
     console.error("Multer-Fehler:", err.code, err.message);
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ message: "Datei ist zu groß. Maximale Größe ist 5MB." });
-    }
     return res.status(400).json({ message: `Upload-Fehler: ${err.message}` });
   } else if (err) {
     // Sonstiger Fehler
@@ -252,8 +249,8 @@ export function registerRoutes(app: express.Application): Server {
 
   app.post("/api/posts", 
     // Multer-Middleware mit Fehlerbehandlung
-    (req, res, next) => {
-      upload.single("image")(req, res, (err) => {
+    (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      upload.single("image")(req, res, (err: any) => {
         if (err) {
           console.error("Fehler beim Upload:", err);
           if (err instanceof multer.MulterError) {
@@ -273,14 +270,14 @@ export function registerRoutes(app: express.Application): Server {
         next();
       });
     },
-    async (req, res) => {
+    async (req: express.Request, res: express.Response) => {
       if (!req.isAuthenticated()) return res.sendStatus(401);
       try {
         console.log("Post-Erstellungsanfrage erhalten:", req.body);
         console.log("Dateiinformationen:", req.file || "Keine Datei hochgeladen");
         
-        let imageUrl = null;
-        let imageData = null;
+        let imageUrl: string | undefined = undefined;
+        let imageData: string | undefined = undefined;
         
         if (req.file) {
           try {
@@ -366,8 +363,8 @@ export function registerRoutes(app: express.Application): Server {
           content: req.body.content,
           scheduledDate: scheduledDate,
           accountId: accountId,
-          imageData: imageData, // Base64-Bild in der Datenbank speichern statt Dateipfad
-          userId: req.user.id,
+          imageData, // Base64-Bild in der Datenbank speichern statt Dateipfad
+          userId: (req.user as any).id,
         };
 
         console.log("Erstelle Post mit Daten:", { 
@@ -408,7 +405,7 @@ export function registerRoutes(app: express.Application): Server {
           }
           
           res.json(post);
-        } catch (dbError) {
+        } catch (dbError: unknown) {
           console.error("Datenbankfehler beim Erstellen des Posts:", dbError);
           
           // Detailliertere Fehlerinformationen erfassen
@@ -416,17 +413,17 @@ export function registerRoutes(app: express.Application): Server {
             message: "Der Post konnte nicht erstellt werden", 
             error: dbError instanceof Error ? dbError.message : String(dbError),
             details: "Datenbankfehler beim Speichern des Posts",
-            code: dbError.code,
-            sqlState: dbError.sqlState,
-            hint: dbError.hint,
-            errorPosition: dbError.position
+            code: (dbError as any)?.code,
+            sqlState: (dbError as any)?.sqlState,
+            hint: (dbError as any)?.hint,
+            errorPosition: (dbError as any)?.position
           };
           
           console.error("Vollständige Fehlerinformationen:", JSON.stringify(errorInfo, null, 2));
           
           return res.status(500).json(errorInfo);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Fehler beim Erstellen des Posts:", error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         res.status(500).json({ 

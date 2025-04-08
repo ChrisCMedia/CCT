@@ -44,9 +44,11 @@ export default function TodoPage() {
   const createTodoMutation = useMutation({
     mutationFn: async (data: { title: string; description: string; deadline?: Date; assignedToUserId?: number }) => {
       try {
+        console.log("Sende Todo-Daten:", JSON.stringify(data));
         const res = await apiRequest("POST", "/api/todos", data);
         if (!res.ok) {
           const errorData = await res.json();
+          console.error("Fehler-Antwort vom Server:", errorData);
           throw new Error(errorData.message || "Fehler beim Erstellen der Aufgabe");
         }
         return await res.json();
@@ -66,6 +68,7 @@ export default function TodoPage() {
       });
     },
     onError: (error: Error) => {
+      console.error("Todo-Erstellung fehlgeschlagen:", error);
       toast({
         title: "Fehler",
         description: "Die Aufgabe konnte nicht erstellt werden: " + error.message,
@@ -182,14 +185,16 @@ export default function TodoPage() {
                 </Popover>
               </div>
               <Button
-                onClick={() => 
-                  newTodo.trim() && 
-                  createTodoMutation.mutate({ 
-                    title: newTodo.trim(), 
-                    description: newDescription.trim(),
-                    deadline: deadline,
-                  })
-                }
+                onClick={() => {
+                  if (newTodo.trim()) {
+                    console.log("Erstelle neues Todo:", newTodo.trim());
+                    createTodoMutation.mutate({ 
+                      title: newTodo.trim(), 
+                      description: newDescription.trim(),
+                      deadline: deadline,
+                    });
+                  }
+                }}
                 disabled={!newTodo.trim() || createTodoMutation.isPending}
               >
                 Hinzufügen

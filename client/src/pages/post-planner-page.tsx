@@ -99,19 +99,30 @@ export default function PostPlannerPage() {
       return;
     }
 
+    console.log(`Bild ausgewählt: ${file.name}, Größe: ${file.size} Bytes, Typ: ${file.type}`);
+
     if (isEditing) {
       setEditingImage(file);
       const url = URL.createObjectURL(file);
       setEditingPreviewUrl(url);
+      console.log("Vorschau-URL für Bearbeitung erstellt:", url);
     } else {
       setSelectedImage(file);
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
+      console.log("Vorschau-URL erstellt:", url);
     }
   };
 
   const createPostMutation = useMutation({
     mutationFn: async (data: { content: string; scheduledDate: Date; accountIds: number[]; image?: File }) => {
+      console.log("Starte Post-Erstellung mit Daten:", {
+        content: data.content.substring(0, 50) + (data.content.length > 50 ? "..." : ""),
+        scheduledDate: data.scheduledDate,
+        accountIds: data.accountIds,
+        hasImage: !!data.image
+      });
+
       const formData = new FormData();
       formData.append("content", data.content);
       formData.append("scheduledDate", data.scheduledDate.toISOString());
@@ -130,22 +141,29 @@ export default function PostPlannerPage() {
         console.log("Kein Bild für Upload ausgewählt");
       }
 
+      // Logge FormData-Einträge zur Überprüfung
+      console.log("FormData-Einträge:");
       for (const pair of formData.entries()) {
-        console.log(`FormData: ${pair[0]}, ${pair[1] instanceof File ? 'File: ' + pair[1].name : pair[1]}`);
+        console.log(`${pair[0]}: ${pair[1] instanceof File ? 'File: ' + pair[1].name : pair[1]}`);
       }
 
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        body: formData,
-      });
+      try {
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          body: formData,
+        });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: "Unbekannter Fehler" }));
-        console.error("Post-Erstellung fehlgeschlagen:", errorData);
-        throw new Error(errorData.message || "Fehler beim Erstellen des Posts");
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ message: "Unbekannter Fehler" }));
+          console.error("Post-Erstellung fehlgeschlagen:", errorData);
+          throw new Error(errorData.message || "Fehler beim Erstellen des Posts");
+        }
+
+        return res.json();
+      } catch (error) {
+        console.error("Netzwerk- oder Serverfehler:", error);
+        throw error;
       }
-
-      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });

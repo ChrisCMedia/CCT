@@ -19,40 +19,42 @@ async function throwIfResNotOk(res: Response) {
 
 export async function apiRequest(
   method: string,
-  url: string,
-  data?: unknown | undefined,
+  endpoint: string,
+  data?: any,
+  options: RequestInit = {}
 ): Promise<Response> {
-  console.log(`Anfrage: ${method} ${url}`);
-  
-  // Für normale Anfragen einfach zum Server durchlassen
   const headers: HeadersInit = {
-    "Accept": "application/json",
-    "X-Requested-With": "XMLHttpRequest"
+    'Content-Type': 'application/json',
+    ...options.headers,
   };
-  
-  if (data) {
-    headers["Content-Type"] = "application/json";
-  }
-  
+
   try {
-    const res = await fetch(url, {
+    console.log(`API Request: ${method} ${endpoint}`);
+    if (data) {
+      console.log('Request data:', JSON.stringify(data).substring(0, 500) + (JSON.stringify(data).length > 500 ? '...' : ''));
+    }
+    
+    const response = await fetch(endpoint, {
       method,
       headers,
       body: data ? JSON.stringify(data) : undefined,
-      credentials: "include", // Wichtig für Cookies
-      mode: "cors", // CORS explizit aktivieren
+      ...options,
+      credentials: 'include',
     });
-    
-    console.log(`Antwort: ${res.status} ${res.statusText}`);
-    console.log("Response Headers:", [...res.headers.entries()].map(([k, v]) => `${k}: ${v}`).join(", "));
-    
-    if (!res.ok) {
-      await throwIfResNotOk(res);
+
+    if (!response.ok && response.status !== 401) {
+      console.error(`API Error (${response.status}): ${endpoint}`);
+      try {
+        const errorData = await response.clone().json();
+        console.error('Error response:', errorData);
+      } catch (e) {
+        console.error('Failed to parse error response');
+      }
     }
-    
-    return res;
+
+    return response;
   } catch (error) {
-    console.error(`API Request Fehler: ${error}`);
+    console.error(`Fetch error for ${endpoint}:`, error);
     throw error;
   }
 }
