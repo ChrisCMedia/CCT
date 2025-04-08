@@ -1,4 +1,4 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
+import { Pool, neonConfig, type NeonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import { drizzle as drizzleSQLite } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
@@ -34,11 +34,11 @@ if (process.env.VERCEL === 'true' || process.env.VERCEL === '1') {
   // Wir verwenden zuerst direkte Verbindung und dann erst den Proxy als Fallback
   neonConfig.wsProxy = undefined; // Wir starten ohne Proxy
   
-  // Verbindungs-Timeouts erhöhen (Beispielwerte)
-  // neonConfig.connectionTimeoutMillis = 60000; // Ist nicht Teil der offiziellen neonConfig, kann über Pool-Optionen gesetzt werden
+  // Verbindungs-Timeouts erhöhen
+  neonConfig.connectionTimeoutMillis = 60000; // 60 Sekunden
   (neonConfig as any).retryInterval = 1000;
   (neonConfig as any).retryLimit = 5;
-  // console.log("Verbindungs-Timeouts angepasst:", (neonConfig as any).connectionTimeoutMillis, "ms"); // Entfernt, da nicht Teil von neonConfig
+  console.log("Verbindungs-Timeouts angepasst:", (neonConfig as any).connectionTimeoutMillis, "ms");
 } else {
   // Für lokale Entwicklung
   console.log("Konfiguriere Neon für lokale Entwicklung...");
@@ -194,7 +194,7 @@ try {
       if (process.env.VERCEL === 'true' || process.env.VERCEL === '1') {
         const wsProxyValue = process.env.VERCEL_URL || undefined;
         console.log("WebSocket Proxy aktiviert:", !!wsProxyValue, "Wert:", wsProxyValue);
-        (neonConfig as any).wsProxy = wsProxyValue; // Korrekter Zugriff auf wsProxy über neonConfig
+        neonConfig.wsProxy = wsProxyValue;
       }
       
       pool = new Pool({ 

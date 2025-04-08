@@ -3,7 +3,7 @@ import { setupAuth } from "./auth.js";
 import { storage } from "./storage.js";
 import multer from "multer";
 import path from "path";
-import express, { type Request, type Response, type NextFunction, type Application } from "express";
+import express from "express";
 import { users } from "./shared/schema-basic.js";
 import { insertNewsletterSchema, insertSocialAccountSchema, type User, type Todo, type Post, type SocialAccount, type Newsletter, type Subtask } from "./shared/schema.js";
 import { exec } from "child_process";
@@ -95,7 +95,7 @@ const upload = multer({
 });
 
 // Globaler Multer-Fehlerhandler
-const handleMulterError = (err: any, req: Request, res: Response, next: NextFunction) => {
+const handleMulterError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     // Multer-spezifischer Fehler
     console.error("Multer-Fehler:", err.code, err.message);
@@ -148,7 +148,7 @@ export function registerRoutes(app: Application): Server {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const todos = await storage.getTodos();
-      res.json(todos);
+      res.json(todos || null);
     } catch (error) {
       console.error("Error fetching todos:", error);
       // Sicherer Zugriff auf error.message
@@ -171,8 +171,7 @@ export function registerRoutes(app: Application): Server {
       // Füge den Benutzer zur Todo hinzu
       const todoData = {
         ...req.body,
-        // Annahme: req.user ist vom Typ UserWithId
-        userId: (req.user as UserWithId).id
+        userId: (req.user as any).id
       };
       
       const newTodo = await storage.createTodo(todoData);
@@ -193,7 +192,7 @@ export function registerRoutes(app: Application): Server {
         deadline: req.body.deadline ? new Date(req.body.deadline) : undefined,
         assignedToUserId: req.body.assignedToUserId,
       });
-      res.json(todo);
+      res.json(todo || null);
     } catch (error) {
       console.error("Error updating todo:", error);
       // Sicherer Zugriff auf error.message
@@ -223,7 +222,7 @@ export function registerRoutes(app: Application): Server {
         title: req.body.title,
         todoId: Number(req.params.todoId),
       });
-      res.json(subtask);
+      res.json(subtask || null);
     } catch (error) {
       console.error("Error creating subtask:", error);
       // Sicherer Zugriff auf error.message
@@ -239,7 +238,7 @@ export function registerRoutes(app: Application): Server {
         Number(req.params.id),
         req.body.completed
       );
-      res.json(subtask);
+      res.json(subtask || null);
     } catch (error) {
       console.error("Error updating subtask:", error);
       // Sicherer Zugriff auf error.message
@@ -267,7 +266,7 @@ export function registerRoutes(app: Application): Server {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const posts = await storage.getPosts();
-      res.json(posts);
+      res.json(posts || null);
     } catch (error) {
       console.error("Error fetching posts:", error);
       // Sicherer Zugriff auf error.message
@@ -279,7 +278,7 @@ export function registerRoutes(app: Application): Server {
   app.post("/api/posts", 
     // Multer-Middleware mit Fehlerbehandlung
     (req, res, next) => {
-      upload.single("image")(req, res, (err) => {
+      upload.single("image")(req, res, (err: any) => {
         if (err) {
           console.error("Fehler beim Upload:", err);
           if (err instanceof multer.MulterError) {
@@ -389,8 +388,8 @@ export function registerRoutes(app: Application): Server {
           content: req.body.content,
           scheduledDate: scheduledDate,
           accountId: accountId,
-          imageData: imageData, // Base64-Bild in der Datenbank speichern statt Dateipfad
-          userId: req.user.id,
+          imageData: imageData ?? undefined,
+          userId: (req as RequestWithUser).user?.id
         };
 
         console.log("Erstelle Post mit Daten:", { 
@@ -430,21 +429,33 @@ export function registerRoutes(app: Application): Server {
             }
           }
           
-          res.json(post);
+          res.json(post || null);
         } catch (dbError) {
           console.error("Datenbankfehler beim Erstellen des Posts:", dbError);
           
-          // Detailliertere Fehlerinformationen erfassen
+          // Detailliertere Fehlerinformationen erfassen (mit Typ-Prüfung)
+          let errorCode: string | undefined = undefined;
+          let sqlState: string | undefined = undefined;
+          let hint: string | undefined = undefined;
+          let errorPosition: string | undefined = undefined;
+
+          if (dbError && typeof dbError === 'object') {
+            if ('code' in dbError) errorCode = String(dbError.code);
+            if ('sqlState' in dbError) sqlState = String(dbError.sqlState);
+            if ('hint' in dbError) hint = String(dbError.hint);
+            if ('position' in dbError) errorPosition = String(dbError.position);
+          }
+
           const errorInfo = {
-            message: "Der Post konnte nicht erstellt werden", 
+            message: "Der Post konnte nicht erstellt werden",
             error: dbError instanceof Error ? dbError.message : String(dbError),
             details: "Datenbankfehler beim Speichern des Posts",
-            code: dbError.code,
-            sqlState: dbError.sqlState,
-            hint: dbError.hint,
-            errorPosition: dbError.position
+            code: errorCode,
+            sqlState: sqlState,
+            hint: hint,
+            errorPosition: errorPosition
           };
-          
+
           console.error("Vollständige Fehlerinformationen:", JSON.stringify(errorInfo, null, 2));
           
           return res.status(500).json(errorInfo);
@@ -464,7 +475,7 @@ export function registerRoutes(app: Application): Server {
   app.patch("/api/posts/:id", 
     // Multer-Middleware mit Fehlerbehandlung
     (req, res, next) => {
-      upload.single("image")(req, res, (err) => {
+      upload.single("image")(req, res, (err: any) => {
         if (err) {
           console.error("Fehler beim Upload (Update):", err);
           if (err instanceof multer.MulterError) {
@@ -492,8 +503,8 @@ export function registerRoutes(app: Application): Server {
           return res.status(404).json({ message: "Post nicht gefunden" });
         }
 
-        let imageUrl = existingPost.imageUrl;
-        let imageData = existingPost.imageData;
+        let imageUrl: string | undefined = existingPost.imageUrl ?? undefined;
+        let imageData: string | undefined = existingPost.imageData ?? undefined;
         
         if (req.file) {
           // Konvertiere das Bild in einen Base64-String
@@ -501,7 +512,7 @@ export function registerRoutes(app: Application): Server {
           const fileType = req.file.mimetype;
           const base64Image = fileBuffer.toString('base64');
           imageData = `data:${fileType};base64,${base64Image}`;
-          imageUrl = null; // Setze imageUrl auf null, da wir jetzt imageData verwenden
+          imageUrl = undefined;
           console.log("Neues Bild als Base64 konvertiert für Post-Update");
         }
 
@@ -510,7 +521,7 @@ export function registerRoutes(app: Application): Server {
 
         const post = await storage.updatePost(Number(req.params.id), {
           content: req.body.content,
-          userId: req.user.id,
+          userId: (req as RequestWithUser).user?.id,
           scheduledDate: req.body.scheduledDate ? new Date(req.body.scheduledDate) : undefined,
           accountId: req.body.accountId ? Number(req.body.accountId) : undefined,
           imageUrl,
@@ -520,7 +531,7 @@ export function registerRoutes(app: Application): Server {
           articleUrl: req.body.articleUrl,
           scheduledInLinkedIn,
         });
-        res.json(post);
+        res.json(post || null);
       } catch (error) {
         console.error("Error updating post:", error);
         res.status(500).json({ message: "Failed to update post" });
@@ -532,7 +543,7 @@ export function registerRoutes(app: Application): Server {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const post = await storage.approvePost(Number(req.params.id));
-      res.json(post);
+      res.json(post || null);
     } catch (error) {
       console.error("Error approving post:", error);
       res.status(500).json({ message: "Failed to approve post" });
@@ -543,7 +554,7 @@ export function registerRoutes(app: Application): Server {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const post = await storage.unapprovePost(Number(req.params.id));
-      res.json(post);
+      res.json(post || null);
     } catch (error) {
       console.error("Error unapproving post:", error);
       res.status(500).json({ message: "Failed to unapprove post" });
@@ -566,7 +577,7 @@ export function registerRoutes(app: Application): Server {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const comments = await storage.getPostComments(Number(req.params.id));
-      res.json(comments);
+      res.json(comments || null);
     } catch (error) {
       console.error("Error fetching post comments:", error);
       res.status(500).json({ message: "Failed to fetch post comments" });
@@ -579,9 +590,9 @@ export function registerRoutes(app: Application): Server {
       const comment = await storage.createPostComment({
         content: req.body.content,
         postId: Number(req.params.id),
-        userId: req.user.id,
+        userId: (req as RequestWithUser).user?.id,
       });
-      res.json(comment);
+      res.json(comment || null);
     } catch (error) {
       console.error("Error creating post comment:", error);
       res.status(500).json({ message: "Failed to create post comment" });
@@ -604,20 +615,27 @@ export function registerRoutes(app: Application): Server {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const newsletters = await storage.getNewsletters();
-      res.json(newsletters);
+      res.json(newsletters || null);
     } catch (error) {
       console.error("Error fetching newsletters:", error);
       res.status(500).json({ message: "Failed to fetch newsletters" });
     }
   });
 
-  app.post("/api/newsletters", async (req, res) => {
+  app.post("/api/newsletters", async (req: Request, res: Response) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const parsed = insertNewsletterSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json(parsed.error);
-      const newsletter = await storage.createNewsletter({ ...parsed.data, userId: req.user.id });
-      res.json(newsletter);
+      // Validiere mit dem Schema aus schema.ts (sofern es existiert und korrekt ist)
+      // Annahme: insertNewsletterSchema ist korrekt importiert und hat eine safeParse Methode
+      const validationResult = (insertNewsletterSchema as any).safeParse?.(req.body);
+      if (!validationResult || !validationResult.success) {
+        return res.status(400).json({ message: "Ungültige Eingabe", errors: validationResult?.error?.errors });
+      }
+      const newsletter = await storage.createNewsletter({
+        ...validationResult.data,
+        userId: (req as RequestWithUser).user?.id,
+      });
+      res.json(newsletter || null);
     } catch (error) {
       console.error("Error creating newsletter:", error);
       res.status(500).json({ message: "Failed to create newsletter" });
@@ -631,7 +649,7 @@ export function registerRoutes(app: Application): Server {
         title: req.body.title,
         content: req.body.content,
       });
-      res.json(newsletter);
+      res.json(newsletter || null);
     } catch (error) {
       console.error("Error updating newsletter:", error);
       res.status(500).json({ message: "Failed to update newsletter" });
@@ -654,20 +672,27 @@ export function registerRoutes(app: Application): Server {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const accounts = await storage.getSocialAccounts();
-      res.json(accounts);
+      res.json(accounts || null);
     } catch (error) {
       console.error("Error fetching social accounts:", error);
       res.status(500).json({ message: "Failed to fetch social accounts" });
     }
   });
 
-  app.post("/api/social-accounts", async (req, res) => {
+  app.post("/api/social-accounts", async (req: Request, res: Response) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const parsed = insertSocialAccountSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json(parsed.error);
-      const account = await storage.createSocialAccount({ ...parsed.data, userId: req.user.id });
-      res.json(account);
+      // Validiere mit dem Schema aus schema.ts
+      // Annahme: insertSocialAccountSchema ist korrekt importiert und hat eine safeParse Methode
+      const validationResult = (insertSocialAccountSchema as any).safeParse?.(req.body);
+      if (!validationResult || !validationResult.success) {
+        return res.status(400).json({ message: "Ungültige Eingabe", errors: validationResult?.error?.errors });
+      }
+      const account = await storage.createSocialAccount({
+        ...validationResult.data,
+        userId: (req as RequestWithUser).user?.id,
+      });
+      res.json(account || null);
     } catch (error) {
       console.error("Error creating social account:", error);
       res.status(500).json({ message: "Failed to create social account" });
@@ -718,7 +743,7 @@ export function registerRoutes(app: Application): Server {
         const stats = fs.statSync(filePath);
         await storage.updateBackupStatus(backup.id, "completed");
 
-        res.json(backup);
+        res.json(backup || null);
       } catch (error) {
         console.error("Backup-Fehler:", error);
         await storage.updateBackupStatus(backup.id, "failed", error.message);
@@ -734,7 +759,7 @@ export function registerRoutes(app: Application): Server {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const backups = await storage.getBackups();
-      res.json(backups);
+      res.json(backups || null);
     } catch (error) {
       console.error("Error fetching backups:", error);
       res.status(500).json({ message: "Failed to fetch backups" });

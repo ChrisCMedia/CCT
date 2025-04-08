@@ -1,7 +1,46 @@
 import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
-import { z } from 'zod';
-import { createInsertSchema } from 'drizzle-zod';
+
+// Definiere Fallbacks für Module
+const zodFallback = {
+  string: () => ({ optional: () => ({}) }),
+  number: () => ({ optional: () => ({}) }),
+  array: (type) => ({ 
+    min: () => ({}),
+    optional: () => ({})
+  }),
+  coerce: { date: () => ({}) },
+  any: () => ({ optional: () => ({}) }),
+  instanceof: () => ({ optional: () => ({}) })
+};
+
+// Fallback für createInsertSchema
+const createInsertSchemaFallback = (table) => ({
+  pick: () => ({
+    extend: () => ({})
+  })
+});
+
+// Variablen initialisieren
+let z = zodFallback;
+let createInsertSchema = createInsertSchemaFallback;
+
+// Lade Module asynchron
+Promise.all([
+  import('zod').then(zodModule => {
+    z = zodModule.default || zodModule;
+    console.log('Zod erfolgreich geladen');
+  }).catch(e => {
+    console.warn('Fehler beim Laden von Zod, verwende Fallback:', e);
+  }),
+  
+  import('drizzle-zod').then(drizzleZod => {
+    createInsertSchema = drizzleZod.createInsertSchema || drizzleZod.default?.createInsertSchema;
+    console.log('drizzle-zod erfolgreich geladen');
+  }).catch(e => {
+    console.warn('Fehler beim Laden von drizzle-zod, verwende Fallback:', e);
+  })
+]);
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -174,7 +213,8 @@ export const newslettersRelations = relations(newsletters, ({ one }) => ({
   }),
 }));
 
-export const insertSocialAccountSchema = createInsertSchema(socialAccounts)
+export const insertSocialAccountSchema = createInsertSchema(socialAccounts, {
+})
   .pick({
     platform: true,
     accountName: true,
@@ -188,7 +228,9 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
 });
 
-export const insertTodoSchema = createInsertSchema(todos)
+export const insertTodoSchema = createInsertSchema(todos, {
+  deadline: z.coerce.date().optional(),
+})
   .pick({
     title: true,
     description: true,
@@ -196,9 +238,7 @@ export const insertTodoSchema = createInsertSchema(todos)
     assignedToUserId: true,
   })
   .extend({
-    deadline: z.string().optional(),
     subtasks: z.array(z.string()).optional(),
-    assignedToUserId: z.number().optional(),
   });
 
 export const insertSubtaskSchema = createInsertSchema(subtasks).pick({
@@ -206,19 +246,18 @@ export const insertSubtaskSchema = createInsertSchema(subtasks).pick({
   todoId: true,
 });
 
-export const insertPostSchema = createInsertSchema(posts)
+export const insertPostSchema = createInsertSchema(posts, {
+  scheduledDate: z.coerce.date(),
+})
   .pick({
     content: true,
     scheduledDate: true,
+    accountId: true,
     imageUrl: true,
+    imageData: true,
     visibility: true,
-    postType: true,
     articleUrl: true,
-  })
-  .extend({
-    scheduledDate: z.coerce.date(),
-    accountIds: z.array(z.number()).min(1, "Mindestens ein Account muss ausgewählt werden"),
-    image: z.instanceof(File).optional(),
+    postType: true,
   });
 
 export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
@@ -228,7 +267,6 @@ export const insertNewsletterSchema = createInsertSchema(newsletters).pick({
 
 export const insertPostCommentSchema = createInsertSchema(postComments).pick({
   content: true,
-  postId: true,
 });
 
 export const backups = pgTable("backups", {
@@ -239,11 +277,6 @@ export const backups = pgTable("backups", {
   status: text("status").notNull().default("pending"),
   completedAt: timestamp("completed_at"),
   error: text("error"),
-});
-
-export const insertBackupSchema = createInsertSchema(backups).pick({
-  fileName: true,
-  fileSize: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -265,7 +298,6 @@ export type InsertPost = z.infer<typeof insertPostSchema>;
 export type PostAnalytics = typeof postAnalytics.$inferSelect;
 export type SubTask = typeof subtasks.$inferSelect;
 export type Backup = typeof backups.$inferSelect;
-export type InsertBackup = z.infer<typeof insertBackupSchema>;
 export type PostComment = typeof postComments.$inferSelect & {
   user?: User;
 };

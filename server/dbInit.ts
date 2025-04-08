@@ -1,7 +1,7 @@
 import { db, pool } from './db.js';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { migrate as pgMigrate } from 'drizzle-orm/neon-serverless/migrator';
-import { users, todos, subtasks, posts, newsletters, socialAccounts, postAccounts, postAnalytics, postComments, backups } from './shared/schema-basic.js';
+import * as schema from './shared/schema.js';
 import { sql } from 'drizzle-orm';
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
@@ -49,228 +49,41 @@ export async function initializeDatabase() {
           console.log("Datenbankverbindung erfolgreich hergestellt:", testConnection);
           connectionSuccessful = true;
           
-          // Direkte Methode, um die image_data-Spalte hinzuzufügen
-          console.log("Führe direkte Spaltenhinzufügung durch...");
-          
+          // Führe Drizzle-Migrationen aus
+          console.log("Führe Drizzle-Migrationen aus...");
           try {
-            // Einfacher, aber effektiver SQL-Befehl, der in den meisten PostgreSQL-Versionen funktioniert
-            await pool.query(`
-              DO $$ 
-              BEGIN 
-                BEGIN
-                  ALTER TABLE posts ADD COLUMN image_data TEXT;
-                  RAISE NOTICE 'Spalte image_data zur posts-Tabelle hinzugefügt';
-                EXCEPTION
-                  WHEN duplicate_column THEN 
-                    RAISE NOTICE 'Spalte image_data existiert bereits';
-                END;
-              END $$;
-            `);
-            
-            console.log("SQL-Befehl zur Spaltenhinzufügung abgeschlossen");
-            
-            // Überprüfe, ob die Spalte jetzt existiert
-            const checkResult = await pool.query(`
-              SELECT column_name 
-              FROM information_schema.columns 
-              WHERE table_name = 'posts' AND column_name = 'image_data'
-            `);
-            
-            if (checkResult.rows.length > 0) {
-              console.log("Bestätigung: Spalte image_data existiert jetzt in der posts-Tabelle");
+            if (process.env.NODE_ENV === 'production' && db) {
+              await pgMigrate(db, { migrationsFolder: './drizzle' });
+              console.log("Drizzle-Migrationen erfolgreich ausgeführt.");
             } else {
-              console.error("WARNUNG: Die Spalte image_data konnte nicht in der posts-Tabelle gefunden werden");
-              
-              // Versuche zu überprüfen, ob die posts-Tabelle überhaupt existiert
-              const tableExists = await pool.query(`
-                SELECT EXISTS (
-                  SELECT FROM information_schema.tables 
-                  WHERE table_schema = 'public' AND table_name = 'posts'
-                )
-              `);
-              
-              console.log("Existiert die posts-Tabelle?", tableExists.rows[0]?.exists);
-              
-              if (tableExists.rows[0]?.exists) {
-                // Zeige alle Spalten in der Tabelle an, zur Diagnose
-                const allColumns = await pool.query(`
-                  SELECT column_name 
-                  FROM information_schema.columns 
-                  WHERE table_schema = 'public' AND table_name = 'posts'
-                `);
-                
-                console.log("Alle Spalten in der posts-Tabelle:", allColumns.rows.map(row => row.column_name));
-              }
+              console.log("Migrationen werden nur in der Produktionsumgebung ausgeführt.");
             }
           } catch (migrationError) {
             console.error("Fehler beim direkten Hinzufügen der image_data-Spalte:", migrationError);
-            // Sicherer Zugriff auf Fehlereigenschaften
-            const message = migrationError instanceof Error ? migrationError.message : String(migrationError);
-            const code = (migrationError as any)?.code ?? 'UNKNOWN'; // Versuche Code zu extrahieren
-            console.error("Details:", message, code);
+            console.error("Details:", migrationError.message, migrationError.code);
           }
-        } catch (connError) {
-          console.error("Fehler bei der Datenbankverbindung:", connError);
-          throw new Error(`Datenbankverbindungsfehler: ${connError instanceof Error ? connError.message : String(connError)}`);
-        }
-        
-        if (connectionSuccessful && db) {
-          // Prüfe, ob die users-Tabelle existiert
-          console.log("Prüfe, ob die Tabellen bereits existieren...");
-          const checkTableExists = await db.execute(sql`
-            SELECT EXISTS (
-              SELECT FROM information_schema.tables 
-              WHERE table_schema = 'public' 
-              AND table_name = 'users'
-            );
-          `);
           
-          // Sicherer Zugriff auf das Ergebnis
-          const exists = checkTableExists && Array.isArray(checkTableExists) && checkTableExists.length > 0 ? 
-                       checkTableExists[0] && typeof checkTableExists[0] === 'object' && 'exists' in checkTableExists[0] ? 
-                       checkTableExists[0].exists : false : false;
-          
-          console.log("Users-Tabelle existiert:", exists);
-          
-          if (!exists && db) {
-            console.log("Erstelle Tabellen...");
-            
-            // Erstelle die Tabellen manuell in der richtigen Reihenfolge
-            await db.execute(sql`
-              CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
-              );
-              
-              CREATE TABLE IF NOT EXISTS social_accounts (
-                id SERIAL PRIMARY KEY,
-                platform TEXT NOT NULL,
-                account_name TEXT NOT NULL,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                access_token TEXT,
-                refresh_token TEXT,
-                token_expires_at TIMESTAMP,
-                platform_user_id TEXT,
-                platform_page_id TEXT
-              );
-              
-              CREATE TABLE IF NOT EXISTS todos (
-                id SERIAL PRIMARY KEY,
-                title TEXT NOT NULL,
-                description TEXT,
-                completed BOOLEAN NOT NULL DEFAULT false,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                assigned_to_user_id INTEGER REFERENCES users(id),
-                deadline TIMESTAMP
-              );
-              
-              CREATE TABLE IF NOT EXISTS subtasks (
-                id SERIAL PRIMARY KEY,
-                title TEXT NOT NULL,
-                completed BOOLEAN NOT NULL DEFAULT false,
-                todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE
-              );
-              
-              CREATE TABLE IF NOT EXISTS posts (
-                id SERIAL PRIMARY KEY,
-                content TEXT NOT NULL,
-                image_url TEXT,
-                scheduled_date TIMESTAMP NOT NULL,
-                approved BOOLEAN NOT NULL DEFAULT false,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-                account_id INTEGER NOT NULL REFERENCES social_accounts(id) ON DELETE RESTRICT,
-                last_edited_at TIMESTAMP,
-                last_edited_by_user_id INTEGER REFERENCES users(id),
-                platform_post_id TEXT,
-                visibility TEXT DEFAULT 'public',
-                article_url TEXT,
-                post_type TEXT DEFAULT 'post',
-                publish_status TEXT DEFAULT 'draft',
-                failure_reason TEXT,
-                deleted_at TIMESTAMP,
-                scheduled_in_linkedin BOOLEAN DEFAULT false
-              );
-              
-              CREATE TABLE IF NOT EXISTS post_accounts (
-                id SERIAL PRIMARY KEY,
-                post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-                account_id INTEGER NOT NULL REFERENCES social_accounts(id) ON DELETE CASCADE
-              );
-              
-              CREATE TABLE IF NOT EXISTS post_analytics (
-                id SERIAL PRIMARY KEY,
-                post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-                impressions INTEGER DEFAULT 0,
-                clicks INTEGER DEFAULT 0,
-                likes INTEGER DEFAULT 0,
-                shares INTEGER DEFAULT 0,
-                comments INTEGER DEFAULT 0,
-                engagement_rate INTEGER DEFAULT 0,
-                demographic_data JSONB,
-                updated_at TIMESTAMP NOT NULL
-              );
-              
-              CREATE TABLE IF NOT EXISTS post_comments (
-                id SERIAL PRIMARY KEY,
-                content TEXT NOT NULL,
-                post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                created_at TIMESTAMP NOT NULL DEFAULT NOW()
-              );
-              
-              CREATE TABLE IF NOT EXISTS newsletters (
-                id SERIAL PRIMARY KEY,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
-              );
-              
-              CREATE TABLE IF NOT EXISTS backups (
-                id SERIAL PRIMARY KEY,
-                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                file_name TEXT NOT NULL,
-                file_size INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                completed_at TIMESTAMP,
-                error TEXT
-              );
-            `);
-            
-            console.log("Datenbanktabellen erfolgreich erstellt");
-            
-            // Demo-Benutzer erstellen
-            console.log("Erstelle Demo-Benutzer...");
-            try {
-              // Erstelle ein gehashtes Passwort für den Admin-Benutzer
+          // Erstelle Demo-Benutzer nach der Migration
+          console.log("Erstelle/Überprüfe Demo-Benutzer...");
+          try {
+            if (!db) {
+              throw new Error('Datenbank-Objekt ist nicht initialisiert für Benutzererstellung');
+            }
+            // Prüfe, ob der Admin existiert
+            const adminExistsResult = await db.execute(sql`SELECT 1 FROM users WHERE username = 'admin' LIMIT 1`);
+            if (!(adminExistsResult && Array.isArray(adminExistsResult) && adminExistsResult.length > 0)) {
+              console.log("Admin-Benutzer existiert nicht, erstelle ihn...");
               const hashedPassword = await hashPasswordLocal("admin123");
               console.log("Admin-Passwort gehasht:", hashedPassword);
-              
-              if (db) {
-                await db.execute(sql`
-                  INSERT INTO users (username, password)
-                  VALUES ('admin', ${hashedPassword})
-                  ON CONFLICT (username) DO NOTHING;
-                `);
-                console.log("Demo-Benutzer erfolgreich erstellt oder existierte bereits");
-              }
-            } catch (userError) {
-              console.error("Fehler beim Erstellen des Demo-Benutzers:", userError);
-            }
-          } else {
-            console.log("Datenbanktabellen existieren bereits");
-            
-            // Überprüfe, ob der Admin-Benutzer ein gehashtes Passwort hat
-            try {
-              if (!db) {
-                throw new Error('Datenbank-Objekt ist nicht initialisiert');
-              }
-              
-              const adminUser = await db.execute(sql`
-                SELECT * FROM users WHERE username = 'admin' LIMIT 1
+              await db.execute(sql`
+                INSERT INTO users (username, password)
+                VALUES ('admin', ${hashedPassword});
               `);
-              
-              // Sicherer Zugriff auf das Ergebnis
+              console.log("Demo-Benutzer erfolgreich erstellt.");
+            } else {
+              console.log("Admin-Benutzer existiert bereits.");
+              // Optional: Prüfe und aktualisiere Passwort, falls nötig (wie im alten Code)
+              const adminUser = await db.execute(sql`SELECT password FROM users WHERE username = 'admin' LIMIT 1`);
               if (adminUser && Array.isArray(adminUser) && adminUser.length > 0) {
                 const user = adminUser[0];
                 if (user && typeof user === 'object' && 'password' in user && 
@@ -282,14 +95,16 @@ export async function initializeDatabase() {
                     WHERE username = 'admin'
                   `);
                   console.log("Admin-Passwort wurde aktualisiert");
-                } else {
-                  console.log("Admin-Benutzer hat bereits ein korrektes gehashtes Passwort");
                 }
               }
-            } catch (userCheckError) {
-              console.error("Fehler beim Überprüfen des Admin-Benutzers:", userCheckError);
             }
+          } catch (userError) {
+            console.error("Fehler beim Erstellen/Überprüfen des Demo-Benutzers:", userError);
           }
+          
+        } catch (connError) {
+          console.error("Fehler bei der Datenbankverbindung:", connError);
+          throw new Error(`Datenbankverbindungsfehler: ${connError instanceof Error ? connError.message : String(connError)}`);
         }
       } catch (dbConnError) {
         console.error("KRITISCHER FEHLER bei der PostgreSQL-Verbindung:", dbConnError);
