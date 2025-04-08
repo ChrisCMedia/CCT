@@ -338,11 +338,7 @@ export class DatabaseStorage implements IStorage {
     if (!db) throw new Error('Datenbank nicht initialisiert');
     
     try {
-      // Prüfe, ob image_data in der Datenbank existiert, bevor wir versuchen, dorthin zu schreiben
-      const hasImageData = await this.checkIfColumnExists('posts', 'image_data');
-      console.log(`image_data Spalte existiert: ${hasImageData}`);
-      
-      // Erstelle ein sicheres Einfügedaten-Objekt ohne die imageData-Eigenschaft, falls sie nicht unterstützt wird
+      // Erstelle ein Einfügedaten-Objekt
       const insertData: any = {
         content: post.content,
         scheduledDate: post.scheduledDate,
@@ -351,15 +347,9 @@ export class DatabaseStorage implements IStorage {
         imageUrl: post.imageUrl,
         lastEditedAt: new Date(),
         lastEditedByUserId: post.userId,
+        // Füge imageData direkt hinzu, da es im Schema definiert ist
+        imageData: post.imageData,
       };
-      
-      // Füge imageData nur hinzu, wenn die Spalte existiert
-      if (hasImageData && post.imageData) {
-        insertData.imageData = post.imageData;
-      } else if (post.imageData) {
-        // Wenn imageData bereitgestellt wurde, aber die Spalte nicht existiert, logge eine Warnung
-        console.warn('image_data Spalte existiert nicht in der Datenbank, Bild kann nicht als Base64 gespeichert werden');
-      }
       
       // Führe den Insert aus
       const [newPost] = await db.insert(posts).values(insertData).returning();
@@ -370,22 +360,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Hilfsmethode, um zu prüfen, ob eine Spalte in einer Tabelle existiert
+  // Entferne die Prüfung, ob die Spalte existiert, da dies zu Berechtigungsproblemen führt
   private async checkIfColumnExists(tableName: string, columnName: string): Promise<boolean> {
-    if (!pool) return true; // In SQLite-Modus immer true zurückgeben
-    
-    try {
-      const result = await pool.query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = $1 AND column_name = $2
-      `, [tableName, columnName]);
-      
-      return result.rows.length > 0;
-    } catch (error) {
-      console.error(`Fehler beim Prüfen, ob Spalte ${columnName} in Tabelle ${tableName} existiert:`, error);
-      return false; // Im Fehlerfall False zurückgeben, um auf Nummer sicher zu gehen
-    }
+    // Die Spalte existiert im Schema, daher geben wir immer true zurück
+    return true;
   }
 
   async updatePost(id: number, data: {
@@ -405,9 +383,6 @@ export class DatabaseStorage implements IStorage {
     if (!db) throw new Error('Datenbank nicht initialisiert');
     
     try {
-      // Prüfe, ob image_data in der Datenbank existiert
-      const hasImageData = await this.checkIfColumnExists('posts', 'image_data');
-      
       // Aktualisiere last_edited_at und last_edited_by_user_id
       const updateData: any = {
         ...data,
@@ -415,11 +390,7 @@ export class DatabaseStorage implements IStorage {
         lastEditedByUserId: data.userId
       };
       
-      // Entferne imageData aus den Update-Daten, wenn die Spalte nicht existiert
-      if (!hasImageData && 'imageData' in updateData) {
-        console.warn('image_data Spalte existiert nicht in der Datenbank, Bild kann nicht als Base64 aktualisiert werden');
-        delete updateData.imageData;
-      }
+      // Wir prüfen nicht mehr, ob die Spalte existiert, da sie im Schema definiert ist
       
       const [updatedPost] = await db.update(posts)
         .set(updateData)
