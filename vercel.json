@@ -8,6 +8,14 @@
       "main": false
     }
   },
+  "github": {
+    "enabled": true,
+    "silent": false,
+    "autoAlias": true,
+    "production": {
+      "branches": ["rollback-to-working-version"]
+    }
+  },
   "builds": [
     {
       "src": "server/index.ts",
