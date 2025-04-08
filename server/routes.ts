@@ -290,6 +290,9 @@ export function registerRoutes(app: express.Application): Server {
             const base64Image = fileBuffer.toString('base64');
             imageData = `data:${fileType};base64,${base64Image}`;
             console.log("Bild als Base64 konvertiert");
+            
+            // Logge die ersten 100 Zeichen des Base64-Strings zur Überprüfung
+            console.log("Base64-Bildvorschau (gekürzt):", imageData.substring(0, 100) + "...");
           } catch (imageError) {
             console.error("Fehler bei der Bildkonvertierung:", imageError);
             // Fehler bei der Bildverarbeitung führt nicht zum Abbruch des gesamten Requests

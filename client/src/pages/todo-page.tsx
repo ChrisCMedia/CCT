@@ -43,8 +43,17 @@ export default function TodoPage() {
 
   const createTodoMutation = useMutation({
     mutationFn: async (data: { title: string; description: string; deadline?: Date; assignedToUserId?: number }) => {
-      const res = await apiRequest("POST", "/api/todos", data);
-      return res.json();
+      try {
+        const res = await apiRequest("POST", "/api/todos", data);
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || "Fehler beim Erstellen der Aufgabe");
+        }
+        return await res.json();
+      } catch (error) {
+        console.error("Fehler beim Erstellen der Aufgabe:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/todos"] });

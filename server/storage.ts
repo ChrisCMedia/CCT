@@ -356,6 +356,7 @@ export class DatabaseStorage implements IStorage {
       // Füge imageData nur hinzu, wenn die Spalte existiert
       if (hasImageData && post.imageData) {
         insertData.imageData = post.imageData;
+        console.log("Füge imageData zum Post hinzu (Länge):", post.imageData.length);
       } else if (post.imageData) {
         // Wenn imageData bereitgestellt wurde, aber die Spalte nicht existiert, logge eine Warnung
         console.warn('image_data Spalte existiert nicht in der Datenbank, Bild kann nicht als Base64 gespeichert werden');
@@ -363,6 +364,14 @@ export class DatabaseStorage implements IStorage {
       
       // Führe den Insert aus
       const [newPost] = await db.insert(posts).values(insertData).returning();
+      
+      // Logge den neuen Post zur Fehlersuche
+      console.log("Neuer Post erstellt:", {
+        id: newPost.id,
+        content: newPost.content.substring(0, 20) + "...",
+        hasImage: !!newPost.imageData || !!newPost.imageUrl
+      });
+      
       return newPost;
     } catch (error) {
       console.error('Fehler beim Erstellen des Posts:', error);
