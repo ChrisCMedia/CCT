@@ -342,7 +342,7 @@ export class DatabaseStorage implements IStorage {
       const hasImageData = await this.checkIfColumnExists('posts', 'image_data');
       console.log(`image_data Spalte existiert: ${hasImageData}`);
       
-      // Erstelle ein sicheres Einfügedaten-Objekt ohne die imageData-Eigenschaft, falls sie nicht unterstützt wird
+      // Erstelle ein sicheres Einfügedaten-Objekt
       const insertData: any = {
         content: post.content,
         scheduledDate: post.scheduledDate,
@@ -350,32 +350,55 @@ export class DatabaseStorage implements IStorage {
         accountId: post.accountId,
         lastEditedAt: new Date(),
         lastEditedByUserId: post.userId,
+        publishStatus: 'draft', // Standard-Status für neue Posts
       };
+      
+      // Bild verarbeiten
+      let imageDataLogged = false;
       
       // Füge imageUrl hinzu, wenn es vorhanden ist
       if (post.imageUrl) {
         insertData.imageUrl = post.imageUrl;
+        console.log("Speichere Post mit imageUrl:", post.imageUrl);
       }
       
       // Füge imageData nur hinzu, wenn die Spalte existiert und Daten vorhanden sind
       if (hasImageData && post.imageData) {
         insertData.imageData = post.imageData;
-        console.log("Füge imageData zum Post hinzu (Länge):", post.imageData.length);
+        console.log("Füge imageData zum Post hinzu, Länge:", post.imageData.length);
+        console.log("Bildtyp:", post.imageData.substring(0, 30) + "...");
+        imageDataLogged = true;
       } else if (post.imageData) {
-        // Wenn imageData bereitgestellt wurde, aber die Spalte nicht existiert, logge eine Warnung
+        // Wenn imageData bereitgestellt wurde, aber die Spalte nicht existiert
         console.warn('image_data Spalte existiert nicht in der Datenbank, Bild kann nicht als Base64 gespeichert werden');
+        // Versuche, es als URL zu speichern falls möglich
+        if (!post.imageUrl && post.imageData.startsWith('data:')) {
+          console.log("Konvertiere Base64-Bild in URL, da image_data nicht verfügbar ist");
+          // Hier könnten Sie theoretisch das Bild auf einen externen Speicher hochladen
+          // Für diesen Fall lassen wir es einfach
+          console.warn("Bild kann nicht gespeichert werden, da image_data nicht verfügbar ist und keine URL-Konvertierung implementiert ist");
+        }
       }
       
       // Führe den Insert aus
       console.log("Führe Post-Insert mit folgenden Daten aus:", Object.keys(insertData).join(", "));
       const [newPost] = await db.insert(posts).values(insertData).returning();
       
-      // Logge den neuen Post zur Fehlersuche
+      // Vollständige Antwort protokollieren
       console.log("Neuer Post erstellt:", {
         id: newPost.id,
         content: newPost.content.substring(0, 20) + "...",
-        hasImage: !!newPost.imageData || !!newPost.imageUrl
+        hasImageUrl: !!newPost.imageUrl,
+        hasImageData: !!newPost.imageData,
+        scheduledDate: newPost.scheduledDate,
+        fields: Object.keys(newPost)
       });
+      
+      // Überprüfe, ob Bilddaten korrekt gespeichert wurden
+      if ((post.imageUrl || post.imageData) && !newPost.imageUrl && !newPost.imageData) {
+        console.warn("WARNUNG: Bild wurde möglicherweise nicht korrekt gespeichert!");
+        console.warn("Eingabedaten enthielten Bild, aber gespeicherter Post hat keine Bilddaten");
+      }
       
       return newPost;
     } catch (error) {
@@ -427,14 +450,33 @@ export class DatabaseStorage implements IStorage {
       // Prüfe, ob image_data in der Datenbank existiert
       const hasImageData = await this.checkIfColumnExists('posts', 'image_data');
       
+      // Hole zuerst den existierenden Post, um vorhandene Bildwerte zu prüfen
+      const [existingPost] = await db.select().from(posts).where(eq(posts.id, id));
+      
       // Konvertiere null zu undefined für TypeScript-Kompatibilität
       const updateData: any = {
         ...data,
-        imageUrl: data.imageUrl === null ? undefined : data.imageUrl,
-        imageData: data.imageData === null ? undefined : data.imageData,
         lastEditedAt: new Date(),
         lastEditedByUserId: data.userId
       };
+      
+      // Behandle imageUrl und imageData nur, wenn sie explizit gesetzt wurden
+      // Wenn sie nicht im Anfrageobjekt enthalten sind oder undefined sind, behalte die bestehenden Werte bei
+      if (data.imageUrl === null) {
+        // Nur setzen, wenn explizit null gesetzt wurde (Bild löschen)
+        updateData.imageUrl = undefined;
+      } else if (data.imageUrl === undefined) {
+        // Wenn nicht in den Daten, behalte die bestehenden Werte bei
+        delete updateData.imageUrl;
+      }
+      
+      if (data.imageData === null) {
+        // Nur setzen, wenn explizit null gesetzt wurde (Bild löschen)
+        updateData.imageData = undefined;
+      } else if (data.imageData === undefined) {
+        // Wenn nicht in den Daten, behalte die bestehenden Werte bei
+        delete updateData.imageData;
+      }
       
       // Entferne imageData aus den Update-Daten, wenn die Spalte nicht existiert
       if (!hasImageData && 'imageData' in updateData) {

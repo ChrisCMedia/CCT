@@ -153,14 +153,37 @@ export function registerRoutes(app: express.Application): Server {
       if (!req.body.title) {
         return res.status(400).json({ message: 'Titel ist erforderlich' });
       }
+
+      // Deadline-Verarbeitung
+      let deadline = undefined;
+      if (req.body.deadline) {
+        try {
+          deadline = new Date(req.body.deadline);
+          if (isNaN(deadline.getTime())) {
+            console.error("Ungültiges Deadline-Format:", req.body.deadline);
+            return res.status(400).json({ message: 'Ungültiges Deadline-Format' });
+          }
+          console.log("Verarbeitete Deadline:", deadline);
+        } catch (error) {
+          console.error("Fehler bei der Verarbeitung der Deadline:", error);
+          return res.status(400).json({ message: 'Ungültiges Deadline-Format' });
+        }
+      }
       
       // Füge den Benutzer zur Todo hinzu
       const todoData = {
         ...req.body,
-        userId: (req.user as any).id
+        userId: (req.user as any).id,
+        deadline: deadline
       };
       
+      console.log("Erstelle Todo mit Daten:", JSON.stringify({
+        ...todoData,
+        deadline: todoData.deadline ? todoData.deadline.toISOString() : null
+      }));
+      
       const newTodo = await storage.createTodo(todoData);
+      console.log("Todo erfolgreich erstellt:", newTodo.id);
       return res.status(201).json(newTodo);
     } catch (error) {
       console.error('Fehler beim Erstellen eines Todos:', error);
