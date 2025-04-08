@@ -17,7 +17,8 @@
           "node_modules/drizzle-orm/**",
           "node_modules/ws/**",
           "node_modules/bufferutil/**",
-          "node_modules/utf-8-validate/**"
+          "node_modules/utf-8-validate/**",
+          "drizzle/**"
         ],
         "excludeFiles": [
           "node_modules/**/*.{dist,esm,map,md,txt,mjs}",
