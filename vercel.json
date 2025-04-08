@@ -2,6 +2,12 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "git": {
+    "deploymentEnabled": {
+      "rollback-to-working-version": true,
+      "main": false
+    }
+  },
   "builds": [
     {
       "src": "server/index.ts",
