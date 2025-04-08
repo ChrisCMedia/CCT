@@ -54,6 +54,7 @@ export async function initializeDatabase() {
           
           try {
             // Einfacher, aber effektiver SQL-Befehl, der in den meisten PostgreSQL-Versionen funktioniert
+            console.log("Ausführen des SQL-Befehls zum Hinzufügen der image_data-Spalte...");
             await pool.query(`
               DO $$ 
               BEGIN 
@@ -70,11 +71,14 @@ export async function initializeDatabase() {
             console.log("SQL-Befehl zur Spaltenhinzufügung abgeschlossen");
             
             // Überprüfe, ob die Spalte jetzt existiert
+            console.log("Überprüfe, ob die image_data-Spalte existiert...");
             const checkResult = await pool.query(`
               SELECT column_name 
               FROM information_schema.columns 
               WHERE table_name = 'posts' AND column_name = 'image_data'
             `);
+            
+            console.log("Ergebnis der Überprüfung:", JSON.stringify(checkResult.rows));
             
             if (checkResult.rows.length > 0) {
               console.log("Bestätigung: Spalte image_data existiert jetzt in der posts-Tabelle");

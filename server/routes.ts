@@ -477,6 +477,12 @@ export function registerRoutes(app: express.Application): Server {
           imageData = `data:${fileType};base64,${base64Image}`;
           imageUrl = null; // Setze imageUrl auf null, da wir jetzt imageData verwenden
           console.log("Neues Bild als Base64 konvertiert für Post-Update");
+          console.log("Bild-Metadaten:", {
+            größe: fileBuffer.length,
+            typ: fileType,
+            base64Länge: base64Image.length,
+            base64Vorschau: base64Image.substring(0, 50) + "..."
+          });
         }
 
         // Parse boolean value from string

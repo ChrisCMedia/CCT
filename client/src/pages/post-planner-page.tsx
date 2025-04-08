@@ -447,8 +447,14 @@ export default function PostPlannerPage() {
                         alt="Post Bild"
                         className="rounded-lg mt-2 w-full object-cover aspect-video"
                         onError={(e) => {
-                          console.error("Bildfehler:", post.imageData ? "Bild als Base64 vorhanden" : "Kein Base64", 
-                            post.imageUrl ? "ImageUrl vorhanden" : "Keine ImageUrl");
+                          console.error("Bildfehler beim Laden von Post", post.id, ":");
+                          console.error("Bild-Daten vorhanden:", !!post.imageData);
+                          if (post.imageData) {
+                            console.error("Base64 Länge:", post.imageData.length);
+                            console.error("Base64 Vorschau:", post.imageData.substring(0, 50) + "...");
+                            console.error("Base64 Format korrekt:", post.imageData.startsWith("data:"));
+                          }
+                          console.error("Image URL vorhanden:", !!post.imageUrl);
                           e.currentTarget.style.display = 'none';
                         }}
                       />

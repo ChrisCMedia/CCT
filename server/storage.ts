@@ -389,11 +389,16 @@ export class DatabaseStorage implements IStorage {
     if (!pool) return true; // In SQLite-Modus immer true zurückgeben
     
     try {
-      const result = await pool.query(`
+      const query = `
         SELECT column_name 
         FROM information_schema.columns 
         WHERE table_name = $1 AND column_name = $2
-      `, [tableName, columnName]);
+      `;
+      console.log(`Prüfe, ob Spalte ${columnName} in Tabelle ${tableName} existiert mit Abfrage: ${query}`);
+      
+      const result = await pool.query(query, [tableName, columnName]);
+      
+      console.log(`Ergebnis der Spaltenprüfung für ${tableName}.${columnName}:`, JSON.stringify(result.rows), `Spalte existiert: ${result.rows.length > 0}`);
       
       return result.rows.length > 0;
     } catch (error) {
