@@ -34,11 +34,11 @@ if (process.env.VERCEL === 'true' || process.env.VERCEL === '1') {
   // Wir verwenden zuerst direkte Verbindung und dann erst den Proxy als Fallback
   neonConfig.wsProxy = undefined; // Wir starten ohne Proxy
   
-  // Verbindungs-Timeouts erhöhen
-  neonConfig.connectionTimeoutMillis = 60000; // 60 Sekunden
+  // Verbindungs-Timeouts erhöhen (Beispielwerte)
+  // neonConfig.connectionTimeoutMillis = 60000; // Ist nicht Teil der offiziellen neonConfig, kann über Pool-Optionen gesetzt werden
   (neonConfig as any).retryInterval = 1000;
   (neonConfig as any).retryLimit = 5;
-  console.log("Verbindungs-Timeouts angepasst:", (neonConfig as any).connectionTimeoutMillis, "ms");
+  // console.log("Verbindungs-Timeouts angepasst:", (neonConfig as any).connectionTimeoutMillis, "ms"); // Entfernt, da nicht Teil von neonConfig
 } else {
   // Für lokale Entwicklung
   console.log("Konfiguriere Neon für lokale Entwicklung...");
@@ -92,9 +92,9 @@ try {
   console.log("Versuche direkte Verbindung zur PostgreSQL-Datenbank...");
   
   // Verwende die direkte Verbindungs-URL (ohne -pooler)
-  let connectionString = process.env.DATABASE_URL;
+  let connectionString: string | undefined = process.env.DATABASE_URL;
   // Wenn wir auf Vercel sind und die URL den Pooler enthält, entferne ihn für den ersten Versuch
-  if ((process.env.VERCEL === 'true' || process.env.VERCEL === '1') && connectionString.includes("-pooler.")) {
+  if ((process.env.VERCEL === 'true' || process.env.VERCEL === '1') && connectionString?.includes("-pooler.")) {
     connectionString = connectionString.replace(/-pooler\./g, '.');
     console.log("Verwende direkte URL (ohne Pooler)");
   } else {
@@ -114,7 +114,8 @@ try {
   console.log("- idleTimeoutMillis: 30000");
   
   pool = new Pool({ 
-    connectionString,
+    // Stelle sicher, dass connectionString ein String ist oder behandle den undefined-Fall
+    connectionString: connectionString ?? '', // Leerer String als Fallback, wenn undefined (sollte nicht passieren wegen Prüfung oben)
     connectionTimeoutMillis: 60000,
     max: process.env.VERCEL ? 1 : 10, 
     idleTimeoutMillis: 30000, 
@@ -193,11 +194,11 @@ try {
       if (process.env.VERCEL === 'true' || process.env.VERCEL === '1') {
         const wsProxyValue = process.env.VERCEL_URL || undefined;
         console.log("WebSocket Proxy aktiviert:", !!wsProxyValue, "Wert:", wsProxyValue);
-        neonConfig.wsProxy = wsProxyValue;
+        (neonConfig as any).wsProxy = wsProxyValue; // Korrekter Zugriff auf wsProxy über neonConfig
       }
       
       pool = new Pool({ 
-        connectionString: poolerString,
+        connectionString: poolerString ?? '', // Fallback für undefined
         connectionTimeoutMillis: 60000,
         max: process.env.VERCEL ? 1 : 10, 
         idleTimeoutMillis: 30000, 

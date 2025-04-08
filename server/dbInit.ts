@@ -104,7 +104,10 @@ export async function initializeDatabase() {
             }
           } catch (migrationError) {
             console.error("Fehler beim direkten Hinzufügen der image_data-Spalte:", migrationError);
-            console.error("Details:", migrationError.message, migrationError.code);
+            // Sicherer Zugriff auf Fehlereigenschaften
+            const message = migrationError instanceof Error ? migrationError.message : String(migrationError);
+            const code = (migrationError as any)?.code ?? 'UNKNOWN'; // Versuche Code zu extrahieren
+            console.error("Details:", message, code);
           }
         } catch (connError) {
           console.error("Fehler bei der Datenbankverbindung:", connError);

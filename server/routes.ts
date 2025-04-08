@@ -3,14 +3,19 @@ import { setupAuth } from "./auth.js";
 import { storage } from "./storage.js";
 import multer from "multer";
 import path from "path";
-import express from "express";
+import express, { type Request, type Response, type NextFunction, type Application } from "express";
 import { users } from "./shared/schema-basic.js";
-import { insertNewsletterSchema, insertSocialAccountSchema } from "./shared/schema.js";
+import { insertNewsletterSchema, insertSocialAccountSchema, type User, type Todo, type Post, type SocialAccount, type Newsletter, type Subtask } from "./shared/schema.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import { db, executeDirectQuery } from "./db.js";
 import { mkdir, writeFile, readFile, unlink } from "fs/promises";
+
+// Einfache User-Typ Definition mit ID für req.user
+interface UserWithId extends User {
+  id: number;
+}
 
 const execAsync = promisify(exec);
 
@@ -90,7 +95,7 @@ const upload = multer({
 });
 
 // Globaler Multer-Fehlerhandler
-const handleMulterError = (err, req, res, next) => {
+const handleMulterError = (err: any, req: Request, res: Response, next: NextFunction) => {
   if (err instanceof multer.MulterError) {
     // Multer-spezifischer Fehler
     console.error("Multer-Fehler:", err.code, err.message);
@@ -101,12 +106,14 @@ const handleMulterError = (err, req, res, next) => {
   } else if (err) {
     // Sonstiger Fehler
     console.error("Fehler beim Datei-Upload:", err);
-    return res.status(500).json({ message: err.message || "Fehler beim Hochladen der Datei" });
+    // Sicherer Zugriff auf err.message
+    const message = err instanceof Error ? err.message : "Fehler beim Hochladen der Datei";
+    return res.status(500).json({ message });
   }
   next();
 };
 
-export function registerRoutes(app: express.Application): Server {
+export function registerRoutes(app: Application): Server {
   setupAuth(app);
 
   // Registriere den Multer-Fehlerhandler
@@ -130,7 +137,9 @@ export function registerRoutes(app: express.Application): Server {
       res.json(safeUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
-      res.status(500).json({ message: "Failed to fetch users" });
+      // Sicherer Zugriff auf error.message
+      const message = error instanceof Error ? error.message : "Failed to fetch users";
+      res.status(500).json({ message });
     }
   });
 
@@ -142,7 +151,9 @@ export function registerRoutes(app: express.Application): Server {
       res.json(todos);
     } catch (error) {
       console.error("Error fetching todos:", error);
-      res.status(500).json({ message: "Failed to fetch todos" });
+      // Sicherer Zugriff auf error.message
+      const message = error instanceof Error ? error.message : "Failed to fetch todos";
+      res.status(500).json({ message });
     }
   });
 
@@ -160,14 +171,17 @@ export function registerRoutes(app: express.Application): Server {
       // Füge den Benutzer zur Todo hinzu
       const todoData = {
         ...req.body,
-        userId: (req.user as any).id
+        // Annahme: req.user ist vom Typ UserWithId
+        userId: (req.user as UserWithId).id
       };
       
       const newTodo = await storage.createTodo(todoData);
       return res.status(201).json(newTodo);
     } catch (error) {
       console.error('Fehler beim Erstellen eines Todos:', error);
-      return res.status(500).json({ message: 'Fehler beim Erstellen eines Todos' });
+      // Sicherer Zugriff auf error.message
+      const message = error instanceof Error ? error.message : 'Fehler beim Erstellen eines Todos';
+      return res.status(500).json({ message });
     }
   });
 
@@ -182,7 +196,9 @@ export function registerRoutes(app: express.Application): Server {
       res.json(todo);
     } catch (error) {
       console.error("Error updating todo:", error);
-      res.status(500).json({ message: "Failed to update todo" });
+      // Sicherer Zugriff auf error.message
+      const message = error instanceof Error ? error.message : "Failed to update todo";
+      res.status(500).json({ message });
     }
   });
 
@@ -193,7 +209,9 @@ export function registerRoutes(app: express.Application): Server {
       res.sendStatus(200);
     } catch (error) {
       console.error("Error deleting todo:", error);
-      res.status(500).json({ message: "Failed to delete todo" });
+      // Sicherer Zugriff auf error.message
+      const message = error instanceof Error ? error.message : "Failed to delete todo";
+      res.status(500).json({ message });
     }
   });
 
@@ -208,7 +226,9 @@ export function registerRoutes(app: express.Application): Server {
       res.json(subtask);
     } catch (error) {
       console.error("Error creating subtask:", error);
-      res.status(500).json({ message: "Failed to create subtask" });
+      // Sicherer Zugriff auf error.message
+      const message = error instanceof Error ? error.message : "Failed to create subtask";
+      res.status(500).json({ message });
     }
   });
 
@@ -222,7 +242,9 @@ export function registerRoutes(app: express.Application): Server {
       res.json(subtask);
     } catch (error) {
       console.error("Error updating subtask:", error);
-      res.status(500).json({ message: "Failed to update subtask" });
+      // Sicherer Zugriff auf error.message
+      const message = error instanceof Error ? error.message : "Failed to update subtask";
+      res.status(500).json({ message });
     }
   });
 
@@ -233,7 +255,9 @@ export function registerRoutes(app: express.Application): Server {
       res.sendStatus(200);
     } catch (error) {
       console.error("Error deleting subtask:", error);
-      res.status(500).json({ message: "Failed to delete subtask" });
+      // Sicherer Zugriff auf error.message
+      const message = error instanceof Error ? error.message : "Failed to delete subtask";
+      res.status(500).json({ message });
     }
   });
 
@@ -246,7 +270,9 @@ export function registerRoutes(app: express.Application): Server {
       res.json(posts);
     } catch (error) {
       console.error("Error fetching posts:", error);
-      res.status(500).json({ message: "Failed to fetch posts" });
+      // Sicherer Zugriff auf error.message
+      const message = error instanceof Error ? error.message : "Failed to fetch posts";
+      res.status(500).json({ message });
     }
   });
 
